@@ -386,7 +386,7 @@ fun SleepScreen(
     LaunchedEffect(sleeps) {
         // #627: the journal-reminder toggle (default ON) gates this morning sheet too, so disabling the
         // reminder silences both the Today card and this sheet with one switch.
-        if (!NoopPrefs.journalReminderEnabled(context)) return@LaunchedEffect
+        return@LaunchedEffect   // Whoof: journal removed, no morning prompt
         val latestEnd = sleeps.lastOrNull()?.endTs ?: return@LaunchedEffect
         val nowS = System.currentTimeMillis() / 1000L
         val hoursAgo = (nowS - latestEnd) / 3600.0
@@ -566,7 +566,6 @@ fun SleepScreen(
 
     LazyScreenScaffold(
         title = uiString(R.string.l10n_sleep_screen_sleep_3cac34e6),
-        subtitle = "Last night, read in two seconds.",
         listState = sleepListState,   // #sleep-layout: the hold-to-drag frame loop drives this list state
         // LIQUID SKY BACKDROP (the pilot pattern — LiquidScreenSky.kt): the static time-of-day liquid sky
         // settles into the theme canvas behind the header + hero, bled full-width up behind the status bar
@@ -1180,7 +1179,6 @@ private val LIQUID_HERO_RADIUS: Dp = 26.dp
 @Composable
 private fun RestHero(score: Double?, asleepMin: Double?, source: String, overline: String) {
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
-        SectionHeader("Sleep performance", overline = overline, trailing = asleepMin?.let { durationText(it) } ?: "")
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1193,9 +1191,9 @@ private fun RestHero(score: Double?, asleepMin: Double?, source: String, overlin
                 .border(1.dp, Palette.heroBorder.copy(alpha = Palette.heroBorder.alpha * CardAppearance.opacity), RoundedCornerShape(LIQUID_HERO_RADIUS)),
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(Metrics.space24),
+                modifier = Modifier.fillMaxWidth().padding(Metrics.space16),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Metrics.space14),
+                verticalArrangement = Arrangement.spacedBy(Metrics.space8),
             ) {
                 if (score != null) {
                     // The sleep-performance score as a liquid VESSEL, filled to score/100 in the Rest colour
@@ -1206,7 +1204,7 @@ private fun RestHero(score: Double?, asleepMin: Double?, source: String, overlin
                         fraction = (score / 100.0).coerceIn(0.0, 1.0),
                         value = score,
                         tint = Palette.restColor,
-                        diameter = 184.dp,
+                        diameter = 128.dp,   // Whoof: compact hero
                     )
                     // Whoof: the night's duration rides with the score, not two cards further down.
                     Text(

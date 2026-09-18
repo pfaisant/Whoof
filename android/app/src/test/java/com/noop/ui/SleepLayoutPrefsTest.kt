@@ -40,9 +40,7 @@ class SleepLayoutPrefsTest {
         assertEquals(SleepSection.entries.size, decoded.size)
         assertEquals(
             listOf(
-                SleepSection.STAGES, SleepSection.BODY_CLOCK, SleepSection.NIGHT_DETAIL, SleepSection.SLEEP_DEBT,
-                SleepSection.STAGES_VS_TYPICAL, SleepSection.ASLEEP_DURATION, SleepSection.SLEEP_MARKS,
-                SleepSection.HOURS_VS_NEEDED, SleepSection.CONSISTENCY,
+                SleepSection.NIGHT_DETAIL, SleepSection.STAGES, SleepSection.HOURS_VS_NEEDED, SleepSection.CONSISTENCY, SleepSection.SLEEP_DEBT, SleepSection.STAGES_VS_TYPICAL, SleepSection.ASLEEP_DURATION, SleepSection.BODY_CLOCK, SleepSection.SLEEP_MARKS,
             ),
             decoded,
         )
@@ -76,8 +74,7 @@ class SleepLayoutPrefsTest {
         val order = "nightDetail,sleepMarks,asleepDuration,stages,sleepDebt,stagesVsTypical"
         assertEquals(
             listOf(
-                SleepSection.BODY_CLOCK, SleepSection.NIGHT_DETAIL, SleepSection.SLEEP_MARKS, SleepSection.STAGES,
-                SleepSection.STAGES_VS_TYPICAL, SleepSection.HOURS_VS_NEEDED, SleepSection.CONSISTENCY,
+                SleepSection.NIGHT_DETAIL, SleepSection.HOURS_VS_NEEDED, SleepSection.CONSISTENCY, SleepSection.BODY_CLOCK, SleepSection.SLEEP_MARKS, SleepSection.STAGES, SleepSection.STAGES_VS_TYPICAL,
             ),
             SleepLayoutPrefs.visibleOrder(order, "asleepDuration,sleepDebt"),
         )

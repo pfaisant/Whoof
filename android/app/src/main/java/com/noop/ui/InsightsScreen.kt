@@ -323,7 +323,6 @@ fun InsightsScreen(vm: AppViewModel, onOpenInsightsHub: () -> Unit = {}) {
     val skyBehindCards = remember { NoopPrefs.skyBehindCards(skyCtx) }
     LazyScreenScaffold(
         title = uiString(R.string.l10n_insights_screen_insights_b4510362),
-        subtitle = "Interrogate what affects what.",
         topBackground = screenBackdropSlot(showDayCycleBackground, skyBehindCards),
         // Sky-behind-cards fills the viewport so the transparent cards reveal the sky the whole way
         // down (Today / Trends / Sleep / metric-detail parity - same two prefs, same two behaviours).
@@ -348,53 +347,7 @@ fun InsightsScreen(vm: AppViewModel, onOpenInsightsHub: () -> Unit = {}) {
             )
             }
         }
-        item {
-        // Persist a mutated catalog list and refresh state (the pure edit helpers never touch the
-        // canonical key, so a rename/regroup/convert keeps history joined; #322).
-        fun applyCatalog(next: List<JournalCatalogItem>) {
-            saveJournalCatalogItems(ctx, next)
-            catalogItems = next
-        }
-        JournalLogCard(
-            items = resolveJournalItems(importedQuestions, catalogItems, includeHidden = false),
-            answers = dayAnswers,
-            numericAnswers = dayNumeric,
-            dayOffset = dayOffset,
-            onDayOffset = { dayOffset = it },
-            onAnswer = { q, yes ->
-                scope.launch {
-                    vm.repo.upsertJournal(
-                        listOf(JournalEntry(JOURNAL_DEVICE_ID, journalDayKey(dayOffset), q, yes)),
-                    )
-                    journalSeq++
-                }
-            },
-            onNumeric = { q, value ->
-                scope.launch {
-                    // A numeric log writes answeredYes=true AND the value (#322), so the effects engine
-                    // counts the day as logged and the with/without split is unchanged.
-                    vm.repo.upsertJournal(
-                        listOf(JournalEntry(JOURNAL_DEVICE_ID, journalDayKey(dayOffset), q,
-                            answeredYes = true, numericValue = value)),
-                    )
-                    journalSeq++
-                }
-            },
-            onClear = { q ->
-                scope.launch {
-                    vm.repo.deleteJournalEntry(JOURNAL_DEVICE_ID, journalDayKey(dayOffset), q)
-                    journalSeq++
-                }
-            },
-            onAddCustom = { q, kind, group -> applyCatalog(addCustomJournalItem(catalogItems, q, kind, group)) },
-            onRename = { q, name -> applyCatalog(renameJournalItem(catalogItems, q, name)) },
-            onSetGroup = { q, group -> applyCatalog(setJournalItemGroup(catalogItems, q, group)) },
-            onSetKind = { q, kind -> applyCatalog(setJournalItemKind(catalogItems, q, kind)) },
-            onRemoveQuestion = { q -> applyCatalog(removeJournalItem(catalogItems, q)) },
-            onRestoreQuestion = { q -> applyCatalog(restoreJournalItem(catalogItems, q)) },
-        )
-        }
-
+        // Whoof: the journal logging card is gone.
         item { Spacer(Modifier.height(Metrics.sectionGap - 20.dp)) }
 
         // --- Mind: daily mood check-in + mood ↔ body correlations (Swift Mind-lane

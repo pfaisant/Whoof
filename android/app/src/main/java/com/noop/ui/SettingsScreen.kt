@@ -870,7 +870,6 @@ fun SettingsScreen(
 
     ScreenScaffold(
         title = uiString(R.string.l10n_settings_screen_settings_c7f73bb5),
-        subtitle = "Your numbers, your strap, and how NOOP works. All on this phone.",
         // LIQUID SKY BACKDROP (the pilot pattern — LiquidScreenSky.kt): the static time-of-day sky settles
         // into the theme canvas behind the top of the list, exactly like the liquid Today. This is a long,
         // scroll-heavy list with NO hero gauge, so the liquid finish here is just the sky + liquidPress on
@@ -3223,16 +3222,6 @@ fun SettingsScreen(
                 )
                 SettingsRowDivider()
                 SettingsToggleRow(
-                    title = uiString(R.string.l10n_journal_reminder_journal_reminder_0fdc0d9c),
-                    detail = uiString(R.string.l10n_journal_reminder_show_a_today_card_reminding_you_to_log_your_journal_8228bc77),
-                    checked = journalReminder,
-                    onCheckedChange = {
-                        journalReminder = it
-                        NoopPrefs.setJournalReminderEnabled(context, it)
-                    },
-                )
-                SettingsRowDivider()
-                SettingsToggleRow(
                     title = uiString(R.string.l10n_settings_screen_keep_screen_on_during_a_workout_42d27284),
                     detail = "Holds the screen awake while you're recording a workout, so your live heart rate stays visible without the phone dimming. Only applies during a recording. The screen sleeps normally the rest of the time. Leaving it on does use a bit more battery, and means your unlocked screen stays visible for the whole workout, so flip it off if that's a concern.",
                     checked = workoutKeepScreenOn,
@@ -3626,11 +3615,11 @@ fun SettingsScreen(
                             interactionSource = projectHomeInteraction,
                             indication = null,
                         ) {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/ryanbr/noop"))
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://whoof.pfa87.cc"))
                             try {
                                 context.startActivity(intent)
                             } catch (_: ActivityNotFoundException) {
-                                Toast.makeText(context, "github.com/ryanbr/noop", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "whoof.pfa87.cc", Toast.LENGTH_LONG).show()
                             }
                         }
                         .padding(horizontal = 14.dp, vertical = 12.dp)
@@ -3699,6 +3688,26 @@ fun SettingsScreen(
                                     uiString(R.string.l10n_settings_screen_couldn_t_check_try_again_b3c885d9),
                                     style = NoopType.footnote, color = Palette.statusWarning,
                                 )
+                            is UpdateCheck.Result.Available -> {
+                                // Whoof: fetch, verify and hand the APK to the installer from here.
+                                val installPhase by com.noop.update.UpdateInstaller.phase
+                                OutlinedButton(
+                                    onClick = { com.noop.update.UpdateInstaller.start(context, r) },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Palette.accent),
+                                ) {
+                                    Text(
+                                        when (installPhase) {
+                                            is com.noop.update.UpdateInstaller.Phase.Downloading -> "Downloading…"
+                                            is com.noop.update.UpdateInstaller.Phase.Verifying -> "Verifying…"
+                                            else -> "Install ${r.version}"
+                                        },
+                                        style = NoopType.captionNumber,
+                                    )
+                                }
+                                (installPhase as? com.noop.update.UpdateInstaller.Phase.Failed)?.let {
+                                    Text(it.message, style = NoopType.footnote, color = Palette.statusWarning)
+                                }
+                            }
                             else -> {}
                         }
                     }

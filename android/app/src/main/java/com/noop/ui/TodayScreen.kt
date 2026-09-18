@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +33,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -510,7 +512,7 @@ fun TodayScreen(
     // #today-layout: the user-ordered below-hero section list + its editor dialog flag. Read once (prefs
     // aren't reactive) and re-read on the editor's save, exactly like enabledKeyMetrics above.
     var showLayoutEditor by remember { mutableStateOf(false) }
-    var sectionOrder by remember { mutableStateOf(TodayLayoutPrefs.order(context)) }
+    var sectionOrder by remember { mutableStateOf(TodayLayoutPrefs.order(context).filterNot { it == TodaySection.JOURNAL }) }   // Whoof: journal removed
     var hiddenSections by remember { mutableStateOf(TodayLayoutPrefs.hidden(context)) }
     // #today-layout (hold-to-drag): the hoisted list state (the drag math needs layoutInfo + scrollBy) and
     // the live drag state. The frame loop below runs ONLY while a section is lifted: each frame it retries
@@ -1458,8 +1460,8 @@ fun TodayScreen(
                     animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
                 )
                 Box(
-                    modifier = Modifier.size(HeaderClusterControl),
-                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.height(HeaderClusterControl).widthIn(min = HeaderClusterControl),
+                    contentAlignment = Alignment.CenterStart,
                 ) {
                     if (scanAffordance > 0.01f) {
                         Box(modifier = Modifier.graphicsLayer { alpha = scanAffordance }) {
@@ -1482,6 +1484,38 @@ fun TodayScreen(
                 )
             }
         }
+        }
+
+        // Whoof: in-app update banner. Appears once the daily catalogue check finds a newer build.
+        val pendingUpdate by com.noop.update.UpdateWatch.available
+        pendingUpdate?.let { upd ->
+            item {
+                val installPhase by com.noop.update.UpdateInstaller.phase
+                NoopCard(padding = Metrics.space12, tint = Palette.accent) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Filled.Download, contentDescription = null, tint = Palette.accent, modifier = Modifier.size(18.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Whoof ${upd.version}", style = NoopType.headline, color = Palette.textPrimary)
+                            (installPhase as? com.noop.update.UpdateInstaller.Phase.Failed)?.let {
+                                Text(it.message, style = NoopType.caption, color = Palette.statusWarning)
+                            }
+                        }
+                        Button(
+                            onClick = { com.noop.update.UpdateInstaller.start(context, upd) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Palette.accent, contentColor = Palette.surfaceBase),
+                        ) {
+                            Text(
+                                when (installPhase) {
+                                    is com.noop.update.UpdateInstaller.Phase.Downloading -> "Downloading…"
+                                    is com.noop.update.UpdateInstaller.Phase.Verifying -> "Verifying…"
+                                    else -> "Install"
+                                },
+                                style = NoopType.captionNumber,
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // A "workout in progress" indicator whenever a manual workout is active (iOS parity: the Today
@@ -1638,8 +1672,7 @@ fun TodayScreen(
                 TodaySection.MENSTRUAL_CYCLE ->
                     selectedDayOffset == 0 && !cycleHidden &&
                         (cycleOptInApplies(profileStore.sex) || cycleEnabled || periodStarts.isNotEmpty())
-                TodaySection.JOURNAL ->
-                    selectedDayOffset == 0 && journalReminderOn
+                TodaySection.JOURNAL -> false   // Whoof: journal removed
                 TodaySection.ADDED_CARDS ->
                     selectedDayOffset == 0 && enabledHostedCards.isNotEmpty()
                 else -> true
@@ -2324,33 +2357,30 @@ private fun TodayCardDismissButton(onClick: () -> Unit, modifier: Modifier = Mod
  */
 @Composable
 private fun RescanDisc(scanning: Boolean, onClick: () -> Unit) {
+    // Whoof: a labelled Connect pill instead of a bare glyph; accent while idle, dimmed while scanning.
     val interaction = remember { MutableInteractionSource() }
-    Box(
+    Row(
         modifier = Modifier
-            .size(HeaderClusterControl)
+            .height(HeaderClusterControl)
             .liquidPress(interaction)
-            .clip(CircleShape)
-            // The same translucent-white disc its siblings use: part of the header, not a call to action.
-            .background(Color.White.copy(alpha = if (scanning) 0.08f else 0.16f))
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                enabled = !scanning,
-                onClick = onClick,
-            )
+            .clip(RoundedCornerShape(50))
+            .background(if (scanning) Color.White.copy(alpha = 0.12f) else Palette.accent)
+            .clickable(interactionSource = interaction, indication = null, enabled = !scanning, onClick = onClick)
+            .padding(horizontal = 12.dp)
             .semantics { contentDescription = uiString(R.string.l10n_today_screen_scan_and_connect_40157030) },
-        contentAlignment = Alignment.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(
-            // Bluetooth, not Refresh. Settings can use a circular arrow because the word "Re-scan" is
-            // sitting next to it; here the glyph is the whole affordance, and a circular arrow on a
-            // screen full of numbers reads as "reload my data" rather than "look for my strap". This is
-            // also the icon Live's Scan & Connect button and the onboarding connect steps already use,
-            // so the same action now looks the same everywhere it appears.
             if (scanning) Icons.Filled.BluetoothSearching else Icons.Filled.Bluetooth,
             contentDescription = null,
-            tint = Color.White.copy(alpha = if (scanning) 0.45f else 1f),
-            modifier = Modifier.size(16.dp),
+            tint = if (scanning) Color.White.copy(alpha = 0.6f) else Palette.surfaceBase,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            if (scanning) "Scanning…" else "Connect",
+            style = NoopType.number(12f, weight = FontWeight.Bold),
+            color = if (scanning) Color.White.copy(alpha = 0.7f) else Palette.surfaceBase,
         )
     }
 }

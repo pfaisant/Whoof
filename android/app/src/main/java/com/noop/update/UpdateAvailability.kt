@@ -123,6 +123,22 @@ object UpdateWatch {
     const val KEY_ENABLED = "updates.autoCheck"
     const val KEY_LAST_CHECKED_AT = "updates.lastCheckedAt"
     const val KEY_LAST_POSTED_VERSION = "updates.lastPostedVersion"
+    const val KEY_AVAILABLE_JSON = "updates.availableJson"
+
+    /** Whoof: the newest known update, as Compose state, so Today can offer Install in place. */
+    val available = androidx.compose.runtime.mutableStateOf<UpdateCheck.Result.Available?>(null)
+
+    fun loadAvailable(context: android.content.Context) {
+        val saved = UpdateCheck.Result.Available.fromJson(prefs(context).getString(KEY_AVAILABLE_JSON, null))
+        available.value = saved?.takeIf { it.versionCode > com.noop.BuildConfig.VERSION_CODE }
+    }
+
+    fun setAvailable(context: android.content.Context, update: UpdateCheck.Result.Available?) {
+        prefs(context).edit().apply {
+            if (update == null) remove(KEY_AVAILABLE_JSON) else putString(KEY_AVAILABLE_JSON, update.toJson())
+        }.apply()
+        available.value = update
+    }
 
     fun isEnabled(context: android.content.Context): Boolean =
         prefs(context).getBoolean(KEY_ENABLED, UpdateAvailability.DEFAULT_ENABLED)
@@ -149,6 +165,7 @@ object UpdateWatch {
         nowMs: Long = System.currentTimeMillis(),
     ) {
         val p = prefs(context)
+        loadAvailable(context)   // Whoof: restore the Today banner from the last check
         // Runs before every guard below, including the toggle: a stale announcement must not outlive the
         // feature that posted it (see [UpdateAvailability.shouldPruneAnnouncement]).
         if (UpdateAvailability.shouldPruneAnnouncement(
@@ -170,7 +187,9 @@ object UpdateWatch {
         // is unreachable, which is the one shape a background check must never take.
         p.edit().putLong(KEY_LAST_CHECKED_AT, nowMs).apply()
         val result = runCatching { UpdateCheck.check(currentVersion) }.getOrNull()
+        if (result is UpdateCheck.Result.UpToDate) setAvailable(context, null)
         val available = result as? UpdateCheck.Result.Available ?: return
+        setAvailable(context, available)
         if (!UpdateAvailability.shouldPost(
                 latest = available.version,
                 current = currentVersion,

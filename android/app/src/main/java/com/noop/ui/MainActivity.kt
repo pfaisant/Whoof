@@ -1559,7 +1559,7 @@ fun NoopRoot() {
         // that re-runs (a plain composable body, a keyless effect) would need the guard back.
         val termsCurrent =
             prefs.getString(NoopPrefs.KEY_ACCEPTED_TERMS_VERSION, "") == Terms.CURRENT_VERSION
-        if (onboarded && termsCurrent) {
+        if (onboarded || termsCurrent) {
             com.noop.update.UpdateWatch.runIfDue(context, BuildConfig.VERSION_NAME)
         }
     }
@@ -1569,7 +1569,7 @@ fun NoopRoot() {
     var acceptedTerms by remember {
         mutableStateOf(prefs.getString(NoopPrefs.KEY_ACCEPTED_TERMS_VERSION, "") ?: "")
     }
-    if (acceptedTerms != Terms.CURRENT_VERSION) {
+    if (false && acceptedTerms != Terms.CURRENT_VERSION) {   // Whoof: private build, no clickwrap
         TermsGateScreen(onAccept = {
             prefs.edit()
                 .putString(NoopPrefs.KEY_ACCEPTED_TERMS_VERSION, Terms.CURRENT_VERSION)

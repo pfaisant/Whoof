@@ -21,7 +21,8 @@ import org.junit.Test
 class SleepSectionReorderTest {
 
     // MARKS, STAGES, NIGHT_DETAIL, SLEEP_DEBT, STAGES_VS_TYPICAL, ASLEEP_DURATION
-    private val order = SleepSection.defaultOrder
+    // The upstream order, fixed here so the move expectations below stay valid whatever the default becomes.
+    private val order = listOf(SLEEP_MARKS, STAGES, BODY_CLOCK, NIGHT_DETAIL, SLEEP_DEBT, STAGES_VS_TYPICAL, ASLEEP_DURATION, HOURS_VS_NEEDED, CONSISTENCY)
 
     @Test fun movingDownPlacesTheCardAtTheTargetsSlot() {
         assertEquals(

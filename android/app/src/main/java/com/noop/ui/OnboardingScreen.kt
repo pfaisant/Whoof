@@ -93,7 +93,10 @@ import kotlinx.coroutines.withContext
 @Composable
 fun OnboardingScreen(viewModel: AppViewModel, onFinished: () -> Unit) {
     val context = LocalContext.current
-    val pages = remember { OnboardingPage.entries }
+    val pages = remember {
+        // Whoof: no welcome / expectations / import / notifications / appearance pages.
+        listOf(OnboardingPage.Bluetooth, OnboardingPage.Connect, OnboardingPage.Bonded, OnboardingPage.Profile, OnboardingPage.Done)
+    }
     // rememberSaveable so a config change (rotation, dark-mode, font-scale, locale,
     // multi-window) doesn't recreate the Activity and throw the user back to page 1.
     var pageIndex by rememberSaveable { mutableIntStateOf(0) }

@@ -164,7 +164,6 @@ fun TrendsScreen(vm: AppViewModel) {
 
     LazyScreenScaffold(
         title = stringResource(R.string.nav_trends),
-        subtitle = stringResource(R.string.trends_subtitle),
         // LIQUID SKY BACKDROP (the pilot pattern — LiquidScreenSky.kt): the time-of-day liquid sky settles
         // into the theme canvas behind the header + top rows, full-bleed via the scaffold's topBackground
         // plumbing. Static (LiquidSkyStatic, inside the helper) — never an animated sky behind a scrolling
@@ -237,6 +236,33 @@ fun TrendsScreen(vm: AppViewModel) {
 
         // --- Hero , charge over time. Charge (green) world: domain card wash, a crisp flat line with a
         // bright "now" end-cap, and a TrendChip for the window's move. ---
+        // Whoof: Sleep leads Trends.
+        item {
+            val restAvg = rest.values.averageOrNull()
+            ChartCard(
+                modifier = Modifier.staggeredAppear(index = 2),
+                title = stringResource(R.string.trends_rest),
+                subtitle = rangeSubtitle,
+                trailing = restAvg?.let { "${it.roundToInt()}" },
+                liquidHero = true,
+                headlineValue = restAvg,
+                color = Palette.restColor,
+                tipColor = Palette.restBright,
+                values = rest.values,
+                dates = rest.dates,
+                formatY = { "${it.roundToInt()}" },
+                change = periodChange(rest.values),
+                higherIsBetter = true,
+                changeFmt = { "${it.roundToInt()}" },
+                chartHeadroom = 0.06f,
+                footer = listOf(
+                    stringResource(R.string.trends_avg) to (restAvg?.let { "${it.roundToInt()}" } ?: EM_DASH),
+                    stringResource(R.string.trends_peak) to (rest.values.maxOrNull()?.let { "${it.roundToInt()}" } ?: EM_DASH),
+                    stringResource(R.string.trends_low) to (rest.values.minOrNull()?.let { "${it.roundToInt()}" } ?: EM_DASH),
+                    stringResource(R.string.trends_days) to "${rest.values.size}",
+                ),
+            )
+        }
         item {
             ChartCard(
                 modifier = Modifier.staggeredAppear(index = 3),

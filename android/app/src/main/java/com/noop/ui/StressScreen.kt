@@ -186,7 +186,6 @@ fun StressScreen(vm: AppViewModel, onBreathe: () -> Unit = {}) {
 
     LazyScreenScaffold(
         title = uiString(R.string.l10n_stress_screen_stress_bad33342),
-        subtitle = "Autonomic load from HRV and resting heart rate",
         // LIQUID SKY BACKDROP (the pilot pattern — LiquidScreenSky.kt): the time-of-day liquid sky settles
         // into the theme canvas behind the header + hero vessel, full-bleed (full-width, up behind the
         // status bar via the scaffold's topBackground plumbing), and the cards float OVER it on the flat
