@@ -146,6 +146,8 @@ internal enum class Destination(
 
     // Group: Recovery
     Sleep("sleep", R.string.nav_sleep, Icons.Filled.Bedtime),
+    // Whoof: the Today heart-rate thread as its own bottom-bar tab.
+    Heart("heart", R.string.nav_heart, Icons.Filled.MonitorHeart),
     Breathe("breathe", R.string.nav_breathe, Icons.Filled.Air),
     Stress("stress", R.string.nav_stress, Icons.Filled.Spa),
 
@@ -678,6 +680,7 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                         onManageDevices = { nav.navigateTopLevel(Destination.Devices.route) },
                     )
                 }
+                composable(Destination.Heart.route) { HeartScreen(viewModel) }
                 composable(Destination.Sleep.route) {
                     SleepScreen(
                         vm = viewModel,
@@ -1111,15 +1114,16 @@ internal data class BarTab(val dest: Destination, val icon: ImageVector, @String
  *  More is special-cased (it opens the sheet rather than a route), so it is appended at the call site. */
 internal val barLeadingTabs = listOf(
     BarTab(Destination.Today, Icons.Outlined.GridView, R.string.nav_today),
-    // chart.line.uptrend.xyaxis on iOS — the rising-trend glyph, not a flat bar chart.
-    BarTab(Destination.Trends, Icons.AutoMirrored.Filled.TrendingUp, R.string.nav_trends),
+    // Whoof: Sleep second, Heart third, Trends fourth.
+    BarTab(Destination.Sleep, Icons.Filled.Bedtime, R.string.nav_sleep),
+    BarTab(Destination.Heart, Icons.Filled.MonitorHeart, R.string.nav_heart),
 )
 /**
  * The trailing tabs, as shipped. [barTrailingTabsFor] is what the bar actually draws: Coach is
  * conditional, so this list is the full set rather than the visible one.
  */
 internal val barTrailingTabs = listOf(
-    BarTab(Destination.Sleep, Icons.Filled.Bedtime, R.string.nav_sleep),
+    BarTab(Destination.Trends, Icons.AutoMirrored.Filled.TrendingUp, R.string.nav_trends),
     // #2218: Coach was promoted to a top-level tab on iOS and this side did not follow, so it sat in
     // the More list while the comment above claimed the two bars matched. AutoAwesome is the sparkles
     // glyph iOS uses, and the same one the More row already shows, so the entry a wearer has learned

@@ -152,7 +152,7 @@ private fun CoachSetup(vm: CoachViewModel) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Overline("Provider")
                 SegmentedPillControl(
-                    items = AiProvider.entries,
+                    items = AiProvider.selectable,
                     selection = provider,
                     label = { it.displayName },
                     onSelect = { vm.selectProvider(context, it) },

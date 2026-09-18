@@ -37,10 +37,10 @@ class CoachTabVisibilityTest {
     }
 
     @Test
-    fun `sleep survives the filter`() {
+    fun `trends survives the filter`() {
         // A filter written against the wrong predicate (index, label, icon) could empty the list and still
         // satisfy "coach is absent". Pin a survivor so removal has to be specific.
-        assertTrue(barTrailingTabsFor(coachEnabled = false).any { it.dest == Destination.Sleep })
+        assertTrue(barTrailingTabsFor(coachEnabled = false).any { it.dest == Destination.Trends })
     }
 
 }

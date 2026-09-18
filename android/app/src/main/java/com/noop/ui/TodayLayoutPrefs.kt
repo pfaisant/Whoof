@@ -45,8 +45,13 @@ enum class TodaySection(val raw: String, @StringRes val titleRes: Int) {
         /** The original, hard-coded section order — the default when the layout isn't customised. The
          *  journal widget (#656) is last by default, where it was first added, above the data-sources card. */
         val defaultOrder: List<TodaySection> = listOf(
-            HERO, LIVE_SESSION, SYNTHESIS, KEY_METRICS, WORKOUTS, HEART_RATE, RECOVERY_VITALS, YOUR_CARDS,
-            MENSTRUAL_CYCLE, JOURNAL, ADDED_CARDS,
+            HERO, RECOVERY_VITALS, KEY_METRICS, WORKOUTS, YOUR_CARDS, ADDED_CARDS,
+            HEART_RATE, SYNTHESIS, LIVE_SESSION, MENSTRUAL_CYCLE, JOURNAL,
+        )
+
+        /** Whoof: sections hidden until the user shows them in Arrange. Heart rate has its own tab. */
+        val defaultHidden: List<TodaySection> = listOf(
+            HEART_RATE, SYNTHESIS, LIVE_SESSION, MENSTRUAL_CYCLE, JOURNAL,
         )
     }
 }
@@ -72,7 +77,7 @@ object TodayLayoutPrefs {
 
     /** The explicitly hidden sections in their editor order. Empty/unset means every section is visible. */
     fun hidden(context: Context): List<TodaySection> =
-        decodeHidden(NoopPrefs.of(context).getString(KEY_HIDDEN, null))
+        NoopPrefs.of(context).getString(KEY_HIDDEN, null)?.let { decodeHidden(it) } ?: TodaySection.defaultHidden
 
     /** Persist the explicit reversible hidden list. */
     fun setHidden(context: Context, sections: List<TodaySection>) {

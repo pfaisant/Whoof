@@ -31,7 +31,7 @@ class BottomBarTabsTest {
     @Test
     fun theBarCarriesTheSameFourNamedTabsAsIOS() {
         assertEquals(
-            listOf(Destination.Today, Destination.Trends, Destination.Sleep, Destination.Coach),
+            listOf(Destination.Today, Destination.Sleep, Destination.Heart, Destination.Trends, Destination.Coach),
             barTabs.map { it.dest },
         )
     }

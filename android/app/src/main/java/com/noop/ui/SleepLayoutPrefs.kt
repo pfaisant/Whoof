@@ -96,7 +96,8 @@ object SleepLayoutPrefs {
 
     /** The explicitly hidden cards in their editor order. Empty/unset means every card is visible. */
     fun hidden(context: Context): List<SleepSection> =
-        decodeHidden(NoopPrefs.of(context).getString(KEY_HIDDEN, null))
+        NoopPrefs.of(context).getString(KEY_HIDDEN, null)?.let { decodeHidden(it) }
+            ?: listOf(SleepSection.SLEEP_MARKS)   // Whoof: the tap-to-log card is off until shown in Arrange
 
     /** Persist the explicit reversible hidden list. */
     fun setHidden(context: Context, sections: List<SleepSection>) {

@@ -970,7 +970,7 @@ fun SleepScreen(
 @Composable
 internal fun SleepMarkCard(onMark: (SleepMarkType) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
-        SectionHeader(title = uiString(R.string.l10n_sleep_screen_sleep_marks_8e9b86f0), overline = "Tap to log", trailing = "Phase 1")
+        SectionHeader(title = uiString(R.string.l10n_sleep_screen_sleep_marks_8e9b86f0))
         NoopCard(tint = Palette.restColor) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -1180,7 +1180,7 @@ private val LIQUID_HERO_RADIUS: Dp = 26.dp
 @Composable
 private fun RestHero(score: Double?, asleepMin: Double?, source: String, overline: String) {
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
-        SectionHeader("Sleep performance", overline = overline, trailing = "Rest")
+        SectionHeader("Sleep performance", overline = overline, trailing = asleepMin?.let { durationText(it) } ?: "")
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1208,7 +1208,11 @@ private fun RestHero(score: Double?, asleepMin: Double?, source: String, overlin
                         tint = Palette.restColor,
                         diameter = 184.dp,
                     )
-                    Text(sleepScoreWord(score), style = NoopType.subhead, color = Palette.textSecondary)
+                    // Whoof: the night's duration rides with the score, not two cards further down.
+                    Text(
+                        listOfNotNull(asleepMin?.let { durationText(it) + " asleep" }, sleepScoreWord(score)).joinToString(" · "),
+                        style = NoopType.subhead, color = Palette.textSecondary,
+                    )
                 } else {
                     // No 0–100 score for the night — lead with hours slept as a big rounded headline
                     // whose minutes tick up on appear (the same count-up the scored hero rolls). Mirrors the

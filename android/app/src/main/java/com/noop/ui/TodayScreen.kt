@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.automirrored.filled.BatteryUnknown
+import androidx.compose.material.icons.filled.BatteryStd
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1466,9 +1467,7 @@ fun TodayScreen(
                         }
                     }
                 }
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    LiquidWordmark()
-                }
+                Spacer(modifier = Modifier.weight(1f))   // Whoof: no wordmark
                 CustomizeDisc(onClick = { showLayoutEditor = true })
             }
             // The reply to a tap that went nowhere. Wording comes from the BLE layer, the same text
@@ -1705,7 +1704,7 @@ fun TodayScreen(
                             // #1001: the shared resolution, not a fourth hand-rolled copy of it. Stays null
                             // for a navigated past day so the caption is a TODAY-only explanation.
                             val todayEffort = if (selectedDayOffset == 0) effortForDay else null
-                            if (todayEffort != null && todayEffort < 1.0) {
+                            if (false && todayEffort != null && todayEffort < 1.0) {   // Whoof: no explainer caption
                                 Row(
                                     modifier = Modifier.padding(horizontal = 2.dp),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1916,7 +1915,7 @@ fun TodayScreen(
         }
         // Strap battery only while the link is up AND a real reading exists, a stale % from a
         // dropped connection must not present as live (#159).
-        item {
+        if (false) item {   // Whoof: data sources live under More, not on Today
             TodaySourcesSection(
                 footer,
                 // NOT routed through LiveConsoleReadout.batteryPercent, which substitutes the RING's charge
@@ -2800,68 +2799,37 @@ private fun ChipCapsule(
  *  bolt-slash glyph. Tap → Devices. Mirrors the iOS liquid header battery ring. */
 @Composable
 private fun LiquidBatteryRing(batteryPct: Double?, onClick: () -> Unit) {
+    // Whoof: a compact battery glyph + percent, top-right, tap → Devices.
     val interaction = remember { MutableInteractionSource() }
     val label = batteryPct?.let { uiString(R.string.today_strap_battery_percent, it.roundToInt()) }
         ?: uiString(R.string.today_strap_battery)
-    Box(
+    val pct = batteryPct?.coerceIn(0.0, 100.0)
+    val tint = when {
+        pct == null -> Color.White.copy(alpha = 0.5f)
+        pct < 15 -> Palette.statusCritical
+        pct < 35 -> Palette.statusWarning
+        else -> Color.White.copy(alpha = 0.85f)
+    }
+    Row(
         modifier = Modifier
-            .size(HeaderClusterControl)
+            .height(HeaderClusterControl)
             .liquidPress(interaction)
-            .clip(CircleShape)
-            // A translucent near-black disc + faint white rim, matching iOS (rgba(10,11,16,.5) + white@.15).
-            .background(Color(red = 10f / 255f, green = 11f / 255f, blue = 16f / 255f, alpha = 0.5f))
-            .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-            )
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        if (batteryPct != null) {
-            val pct = batteryPct.coerceIn(0.0, 100.0)
-            val ringColor = when {
-                pct < 15 -> Palette.statusCritical
-                pct < 35 -> Palette.statusWarning
-                else -> Palette.chargeColor
-            }
-            Canvas(modifier = Modifier.size(HeaderClusterControl).padding(2.5.dp)) {
-                val strokePx = 3.dp.toPx()
-                val d = size.minDimension - strokePx
-                val topLeft = Offset((size.width - d) / 2f, (size.height - d) / 2f)
-                // Track.
-                drawArc(
-                    color = Color.White.copy(alpha = 0.10f),
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = Size(d, d),
-                    style = Stroke(width = strokePx, cap = StrokeCap.Round),
-                )
-                // Fill arc (min 2% so a near-flat battery still shows a cap), clockwise from 12 o'clock.
-                drawArc(
-                    color = ringColor,
-                    startAngle = -90f,
-                    sweepAngle = (360f * (pct / 100.0).coerceIn(0.02, 1.0)).toFloat(),
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = Size(d, d),
-                    style = Stroke(width = strokePx, cap = StrokeCap.Round),
-                )
-            }
+        Icon(
+            if (pct == null) Icons.AutoMirrored.Filled.BatteryUnknown else Icons.Filled.BatteryStd,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp),
+        )
+        if (pct != null) {
             Text(
                 uiString(R.string.l10n_today_screen_pct_roundtoint_05ba4549, pct.roundToInt()),
-                style = NoopType.number(9f, weight = FontWeight.Bold),
-                color = Color.White.copy(alpha = 0.9f),
-            )
-        } else {
-            Icon(
-                Icons.AutoMirrored.Filled.BatteryUnknown,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.size(15.dp),
+                style = NoopType.number(11f, weight = FontWeight.Bold),
+                color = tint,
             )
         }
     }
@@ -4105,7 +4073,7 @@ private fun YourCardsSection(
     if (showCoachLauncher) {
         val ctx = LocalContext.current
         CoachLauncherSheet(
-            isConfigured = AiKeyStore.hasKey(ctx),
+            isConfigured = AiKeyStore.hasKey(ctx, AiKeyStore.readProvider(ctx)),
             onPick = { prompt ->
                 showCoachLauncher = false
                 CoachHandoff.pendingPrompt = prompt
@@ -6447,7 +6415,7 @@ private fun HrWindowPills(selection: HrWindow, onSelect: (HrWindow) -> Unit) {
 internal const val HR_CARD_BUCKET_SECONDS = 300L
 
 @Composable
-private fun HeartRateTrendCard(
+internal fun HeartRateTrendCard(
     viewModel: AppViewModel,
     days: List<DailyMetric>,
     selectedDay: LocalDate,

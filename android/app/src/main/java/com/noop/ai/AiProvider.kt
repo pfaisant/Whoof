@@ -22,6 +22,24 @@ enum class AiProvider(
     val endpoint: String,
     val modelsEndpoint: String,
 ) {
+    /**
+     * OpenRouter (Whoof default). OpenAI-compatible wire format (`/chat/completions`, Bearer auth); one
+     * key reaches every hosted model. The live `/models` catalogue is kept unfiltered.
+     */
+    OPENROUTER(
+        displayName = "OpenRouter",
+        defaultModel = "deepseek/deepseek-chat-v3.1",
+        models = listOf(
+            "deepseek/deepseek-chat-v3.1",
+            "google/gemini-2.5-flash",
+            "google/gemini-2.5-pro",
+            "anthropic/claude-sonnet-4.5",
+            "openai/gpt-5-mini",
+            "x-ai/grok-4-fast",
+        ),
+        endpoint = "https://openrouter.ai/api/v1/chat/completions",
+        modelsEndpoint = "https://openrouter.ai/api/v1/models",
+    ),
     OPENAI(
         displayName = "OpenAI",
         defaultModel = "gpt-5-mini",
@@ -107,9 +125,12 @@ enum class AiProvider(
     );
 
     companion object {
-        /** Resolve a provider by its persisted [name], falling back to [OPENAI]. */
+        /** Resolve a provider by its persisted [name], falling back to [OPENROUTER]. */
         fun fromName(name: String?): AiProvider =
-            entries.firstOrNull { it.name == name } ?: OPENAI
+            entries.firstOrNull { it.name == name } ?: OPENROUTER
+
+        /** Whoof: the providers the Coach UI offers. The others stay in the enum so stored prefs decode. */
+        val selectable: List<AiProvider> = listOf(OPENROUTER, GEMINI)
     }
 }
 

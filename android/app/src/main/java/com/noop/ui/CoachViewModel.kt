@@ -204,7 +204,7 @@ class CoachViewModel(app: Application) : AndroidViewModel(app) {
     // MARK: - Key gate
 
     /** True when a non-blank API key is stored. The UI shows the chat only when this is true. */
-    fun hasKey(ctx: Context): Boolean = AiKeyStore.hasKey(ctx)
+    fun hasKey(ctx: Context): Boolean = AiKeyStore.hasKey(ctx, _provider.value)
 
     /**
      * True once the coach can actually send: a stored key for the cloud providers, or, for the

@@ -42,10 +42,7 @@ class TodayLayoutPrefsTest {
         val firstCut = "synthesis,keyMetrics,workouts,heartRate,recoveryVitals,yourCards"
         assertEquals(
             listOf(
-                TodaySection.HERO, TodaySection.LIVE_SESSION,
-                TodaySection.SYNTHESIS, TodaySection.KEY_METRICS, TodaySection.WORKOUTS,
-                TodaySection.HEART_RATE, TodaySection.RECOVERY_VITALS, TodaySection.YOUR_CARDS,
-                TodaySection.MENSTRUAL_CYCLE, TodaySection.JOURNAL, TodaySection.ADDED_CARDS,
+                TodaySection.HERO, TodaySection.ADDED_CARDS, TodaySection.SYNTHESIS, TodaySection.KEY_METRICS, TodaySection.WORKOUTS, TodaySection.HEART_RATE, TodaySection.RECOVERY_VITALS, TodaySection.YOUR_CARDS, TodaySection.LIVE_SESSION, TodaySection.MENSTRUAL_CYCLE, TodaySection.JOURNAL,
             ),
             TodayLayoutPrefs.decodeOrder(firstCut),
         )
@@ -60,13 +57,7 @@ class TodayLayoutPrefsTest {
         assertEquals(TodaySection.entries.size, decoded.size)
         assertEquals(
             listOf(
-                // hero(0), liveSession(1), workouts(4) all precede heartRate(5) in default order, so all
-                // insert before the saved heartRate, in default order among themselves:
-                TodaySection.HERO, TodaySection.LIVE_SESSION, TodaySection.WORKOUTS,
-                TodaySection.HEART_RATE, TodaySection.SYNTHESIS, TodaySection.KEY_METRICS,
-                TodaySection.RECOVERY_VITALS,
-                TodaySection.YOUR_CARDS, TodaySection.MENSTRUAL_CYCLE, TodaySection.JOURNAL,
-                TodaySection.ADDED_CARDS,
+                TodaySection.HERO, TodaySection.WORKOUTS, TodaySection.YOUR_CARDS, TodaySection.ADDED_CARDS, TodaySection.HEART_RATE, TodaySection.SYNTHESIS, TodaySection.KEY_METRICS, TodaySection.RECOVERY_VITALS, TodaySection.LIVE_SESSION, TodaySection.MENSTRUAL_CYCLE, TodaySection.JOURNAL,
             ),
             decoded,
         )
@@ -79,12 +70,7 @@ class TodayLayoutPrefsTest {
         assertEquals(TodaySection.entries.size, decoded.size)
         assertEquals(
             listOf(
-                // Every missing section's default index precedes yourCards(7), so each inserts before it,
-                // accumulating in default order; the saved yourCards→heartRate order is preserved at the end.
-                TodaySection.HERO, TodaySection.LIVE_SESSION, TodaySection.SYNTHESIS,
-                TodaySection.KEY_METRICS, TodaySection.WORKOUTS, TodaySection.RECOVERY_VITALS,
-                TodaySection.YOUR_CARDS, TodaySection.HEART_RATE,
-                TodaySection.MENSTRUAL_CYCLE, TodaySection.JOURNAL, TodaySection.ADDED_CARDS,
+                TodaySection.HERO, TodaySection.RECOVERY_VITALS, TodaySection.KEY_METRICS, TodaySection.WORKOUTS, TodaySection.YOUR_CARDS, TodaySection.ADDED_CARDS, TodaySection.HEART_RATE, TodaySection.SYNTHESIS, TodaySection.LIVE_SESSION, TodaySection.MENSTRUAL_CYCLE, TodaySection.JOURNAL,
             ),
             decoded,
         )
@@ -107,9 +93,7 @@ class TodayLayoutPrefsTest {
         val order = "heartRate,hero,yourCards,liveSession,synthesis,keyMetrics,workouts,recoveryVitals,journal"
         assertEquals(
             listOf(
-                TodaySection.HEART_RATE, TodaySection.YOUR_CARDS, TodaySection.LIVE_SESSION,
-                TodaySection.SYNTHESIS, TodaySection.KEY_METRICS, TodaySection.RECOVERY_VITALS,
-                TodaySection.MENSTRUAL_CYCLE, TodaySection.JOURNAL, TodaySection.ADDED_CARDS,
+                TodaySection.ADDED_CARDS, TodaySection.HEART_RATE, TodaySection.YOUR_CARDS, TodaySection.LIVE_SESSION, TodaySection.SYNTHESIS, TodaySection.KEY_METRICS, TodaySection.RECOVERY_VITALS, TodaySection.MENSTRUAL_CYCLE, TodaySection.JOURNAL,
             ),
             TodayLayoutPrefs.visibleOrder(order, "hero,workouts"),
         )

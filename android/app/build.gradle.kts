@@ -13,6 +13,13 @@ val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
+// Whoof: private build. Coach keys are baked in from ~/.config/pfa87-android/whoof.properties
+// (OPENROUTER_API_KEY / GEMINI_API_KEY); absent → empty, the app then asks for a key in Coach.
+val whoofPropsFile = File(System.getProperty("user.home"), ".config/pfa87-android/whoof.properties")
+val whoofProps = Properties().apply {
+    if (whoofPropsFile.exists()) whoofPropsFile.inputStream().use { load(it) }
+}
+fun whoofKey(name: String): String = "\"" + (whoofProps.getProperty(name) ?: "").trim() + "\""
 val isStagingRelease = project.hasProperty("stagingRelease")
 val requestedReleaseBuild = gradle.startParameter.taskNames.any {
     it.contains("Release", ignoreCase = true)
@@ -23,11 +30,14 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.noop.whoop"
+        applicationId = "cc.pfa87.whoof"
         minSdk = 26
         targetSdk = 34
-        versionCode = 521
-        versionName = "11.8.0"
+        versionCode = 1
+        versionName = "1.0.0"
+
+        buildConfigField("String", "OPENROUTER_API_KEY", whoofKey("OPENROUTER_API_KEY"))
+        buildConfigField("String", "GEMINI_API_KEY", whoofKey("GEMINI_API_KEY"))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

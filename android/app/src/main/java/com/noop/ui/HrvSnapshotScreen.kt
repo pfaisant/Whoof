@@ -96,6 +96,9 @@ fun HrvSnapshotScreen(
     // Every R-R interval (ms) collected during the active capture window — uncapped on purpose; the
     // analyzer wants the whole window.
     val captureBuffer = remember { mutableStateOf<List<Int>>(emptyList()) }
+    // Whoof: the same beats as packets, so an over-counted capture can collapse repeated packets.
+    val capturePackets = remember { mutableStateOf<List<List<Int>>>(emptyList()) }
+    var failReason by remember { mutableStateOf<HrvFail?>(null) }
     var secondsRemaining by remember { mutableIntStateOf(HRV_CAPTURE_SECONDS) }
     // Monotonic start of the active capture — the single time base for the countdown display, the
     // ingest cutoff, and the finish deadline. Null outside a capture.
@@ -128,6 +131,7 @@ fun HrvSnapshotScreen(
                 if (!captureWindowOpen(start.elapsedNow().inWholeMilliseconds)) return@collect
                 val merged = captureBuffer.value + rr
                 captureBuffer.value = merged
+                capturePackets.value = capturePackets.value + listOf(rr)
                 runningRmssd = HrvAnalyzer.rmssdRaw(merged.map { it.toDouble() })
             }
     }
@@ -146,13 +150,22 @@ fun HrvSnapshotScreen(
         }
         // End the capture and run the full cleaning analysis over everything collected.
         val captureMs = start.elapsedNow().inWholeMilliseconds
-        val raw = captureBuffer.value.map { it.toDouble() }
-        // A capture whose collected beat time exceeds the wall clock it ran for held duplicated
-        // beats (e.g. overlapping live sources) — refuse the number rather than publish it.
+        var raw = captureBuffer.value.map { it.toDouble() }
+        failReason = null
+        // Whoof: a capture whose beat time exceeds the wall clock held repeated packets (WHOOP 5 re-sends
+        // an unchanged R-R list with each notification). Collapse consecutive identical packets first;
+        // only refuse when even the collapsed series over-counts.
         if (HrvAnalyzer.spotCaptureOverCounted(raw.sum(), captureMs)) {
-            result = HrvAnalyzer.HrvResult.empty(raw.size)
-            phase = HrvPhase.Done
-            return@LaunchedEffect
+            val collapsed = ArrayList<Int>()
+            var prev: List<Int>? = null
+            for (p in capturePackets.value) { if (p != prev) collapsed.addAll(p); prev = p }
+            raw = collapsed.map { it.toDouble() }
+            if (HrvAnalyzer.spotCaptureOverCounted(raw.sum(), captureMs)) {
+                failReason = HrvFail.OverCounted(raw.size, captureMs)
+                result = HrvAnalyzer.HrvResult.empty(raw.size)
+                phase = HrvPhase.Done
+                return@LaunchedEffect
+            }
         }
         // HRV & Autonomic test mode (Test Centre Group G): when the mode is on, emit the cleaning trace
         // (nInput / nClean / rejected fraction, the range + Malik ectopic counts, the minBeats + spot
@@ -164,12 +177,17 @@ fun HrvSnapshotScreen(
                 .active(com.noop.testcentre.TestDomain.HRV)
         ) {
             val (traced, lines) = HrvAnalyzerTrace.analyzeTrace(
-                raw, HrvAnalyzer.DEFAULT_SPOT_MAX_REJECTED_FRACTION, path = "spot",
+                raw, SPOT_MAX_REJECTED_FRACTION, path = "spot",
             )
             for (line in lines) viewModel.ble.externalLog(line, com.noop.testcentre.TestDomain.HRV)
             traced
         } else {
-            HrvAnalyzer.analyzeRaw(raw, HrvAnalyzer.DEFAULT_SPOT_MAX_REJECTED_FRACTION)
+            HrvAnalyzer.analyzeRaw(raw, SPOT_MAX_REJECTED_FRACTION)
+        }
+        if (result?.rmssd == null) {
+            val clean = HrvAnalyzer.cleanRR(raw).size
+            failReason = if (clean < HrvAnalyzer.MIN_BEATS) HrvFail.TooFew(clean, raw.size)
+                         else HrvFail.TooNoisy(clean, raw.size)
         }
         phase = HrvPhase.Done
     }
@@ -180,7 +198,6 @@ fun HrvSnapshotScreen(
     // spacing identical (LazyColumn reproduces the eager `spacedBy(20.dp)`).
     LazyScreenScaffold(
         title = uiString(R.string.l10n_hrv_snapshot_screen_hrv_reading_a2cf71f3),
-        subtitle = "A still, seated snapshot of your heart-rate variability",
     ) {
         // Status row.
         item {
@@ -315,28 +332,7 @@ fun HrvSnapshotScreen(
         // Result.
         val done = result
         if (phase == HrvPhase.Done && done != null) {
-            item { ResultCard(done) }
-        }
-
-        // Methodology — source-aware caveat (a 5/MG's R-R is optical PPG, noisier than a chest strap).
-        // The same RMSSD math the nightly HRV uses (Task Force 1996, cleaned), so the spot number is
-        // comparable to your overnight figure.
-        item {
-        NoopCard(tint = Palette.restColor) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Overline("How this is measured")
-                Text(
-                    uiString(R.string.l10n_hrv_snapshot_screen_a_60_second_snapshot_of_your_35f03f7c) +
-                        " (range and ectopic-beat filtering) before computing RMSSD the same way your " +
-                        "overnight HRV is computed.",
-                    style = NoopType.footnote, color = Palette.textTertiary,
-                )
-                Text(
-                    SpotHrvReading.caveatFor(source),
-                    style = NoopType.footnote, color = Palette.textTertiary,
-                )
-            }
-        }
+            item { ResultCard(done, failReason) }
         }
 
         if (!bonded) { item { NotBondedHint() } }
@@ -346,6 +342,23 @@ fun HrvSnapshotScreen(
 // MARK: - Capture phase
 
 private enum class HrvPhase { Idle, Capturing, Done }
+
+/** Whoof: spot readings from optical R-R are noisier than a chest strap; allow up to half the beats to be
+ *  dropped before refusing (upstream 0.35). MIN_BEATS still applies. */
+private const val SPOT_MAX_REJECTED_FRACTION = 0.5
+
+/** Why a finished capture produced no number. Each carries the counts so the card says what happened. */
+private sealed class HrvFail {
+    data class OverCounted(val beats: Int, val captureMs: Long) : HrvFail()
+    data class TooFew(val clean: Int, val total: Int) : HrvFail()
+    data class TooNoisy(val clean: Int, val total: Int) : HrvFail()
+
+    fun text(): String = when (this) {
+        is OverCounted -> "$beats beats in ${captureMs / 1000}s: the strap repeated beats. Try again."
+        is TooFew -> "$clean of $total beats were clean, need ${HrvAnalyzer.MIN_BEATS}."
+        is TooNoisy -> "Too noisy: only $clean of $total beats were clean. Sit still, wrist relaxed."
+    }
+}
 
 // MARK: - Capture dial
 
@@ -414,7 +427,7 @@ private fun CaptureDial(fraction: Float, value: String, unit: String, sub: Strin
 // MARK: - Result
 
 @Composable
-private fun ResultCard(result: HrvAnalyzer.HrvResult) {
+private fun ResultCard(result: HrvAnalyzer.HrvResult, fail: HrvFail? = null) {
     NoopCard(padding = 18.dp, tint = Palette.restColor) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Overline("Your reading")
@@ -426,8 +439,7 @@ private fun ResultCard(result: HrvAnalyzer.HrvResult) {
                 ) {
                     Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = Palette.statusWarning)
                     Text(
-                        uiString(R.string.l10n_hrv_snapshot_screen_not_enough_clean_beats_sit_still_0893e6c2, result.nClean) +
-                            "${result.nInput} beats survived filtering (need ${HrvAnalyzer.MIN_BEATS}).",
+                        fail?.text() ?: "Not enough clean beats. ${result.nInput} captured, need ${HrvAnalyzer.MIN_BEATS} clean.",
                         style = NoopType.footnote, color = Palette.textSecondary,
                     )
                 }
@@ -543,9 +555,9 @@ private fun instruction(phase: HrvPhase, bonded: Boolean, result: HrvAnalyzer.Hr
         }
         HrvPhase.Capturing -> "Sit still, breathe normally. Keep your wrist relaxed and steady."
         HrvPhase.Done -> if (result != null && result.rmssd == null) {
-            "Not enough clean beats - sit still and try again."
+            "No reading. Sit still and try again."
         } else {
-            "Done. Save this reading to keep it in your trends."
+            "Done."
         }
     }
 

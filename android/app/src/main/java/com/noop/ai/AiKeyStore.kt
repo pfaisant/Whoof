@@ -88,14 +88,24 @@ object AiKeyStore {
      * another provider's (or an arbitrary Custom) endpoint.
      */
     fun read(ctx: Context, provider: AiProvider): String? {
-        val key = read(ctx) ?: return null
+        val key = read(ctx) ?: return bakedKey(provider)
         val owner = keyOwner(ctx)
         return when {
             owner == provider -> key
             owner == null && provider != AiProvider.CUSTOM -> key
-            else -> null
+            else -> bakedKey(provider)
         }
     }
+
+    /** Whoof: a key baked in at build time (BuildConfig, from whoof.properties), or null when blank. */
+    fun bakedKey(provider: AiProvider): String? = when (provider) {
+        AiProvider.OPENROUTER -> com.noop.BuildConfig.OPENROUTER_API_KEY
+        AiProvider.GEMINI -> com.noop.BuildConfig.GEMINI_API_KEY
+        else -> ""
+    }.takeIf { it.isNotBlank() }
+
+    /** True when a key is usable for [provider]: saved, or baked in. */
+    fun hasKey(ctx: Context, provider: AiProvider): Boolean = read(ctx, provider) != null
 
     /** Remove the stored API key (and its owner). The provider/model preferences are left intact. */
     fun clear(ctx: Context) {

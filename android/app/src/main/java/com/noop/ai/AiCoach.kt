@@ -151,7 +151,7 @@ class AiCoach(
         val groundedWithSummary = injectDroppedSummary(grounded, groundedFull)
 
         when (provider) {
-            AiProvider.OPENAI ->
+            AiProvider.OPENAI, AiProvider.OPENROUTER ->
                 callOpenAiCompatible(provider, provider.endpoint, model, key, groundedWithSummary, systemPrompt)
             AiProvider.ANTHROPIC ->
                 callAnthropic(provider, model, key!!, groundedWithSummary, systemPrompt)
@@ -226,7 +226,7 @@ class AiCoach(
         val groundedWithSummary = injectDroppedSummary(grounded, groundedFull)
 
         when (provider) {
-            AiProvider.OPENAI ->
+            AiProvider.OPENAI, AiProvider.OPENROUTER ->
                 callOpenAiCompatibleStream(provider, provider.endpoint, model, key, groundedWithSummary, systemPrompt, onDelta)
             AiProvider.ANTHROPIC ->
                 callAnthropicStream(provider, model, key!!, groundedWithSummary, systemPrompt, onDelta)
@@ -290,7 +290,7 @@ class AiCoach(
         val builder = Request.Builder().url(url).get()
         when (provider) {
             // key is non-null here: the early return above only spares the Custom provider.
-            AiProvider.OPENAI -> builder.addHeader("Authorization", "Bearer ${key!!}")
+            AiProvider.OPENAI, AiProvider.OPENROUTER -> builder.addHeader("Authorization", "Bearer ${key!!}")
             AiProvider.ANTHROPIC -> {
                 builder.addHeader("x-api-key", key!!)
                 builder.addHeader("anthropic-version", "2023-06-01")
@@ -1275,7 +1275,7 @@ class AiCoach(
                     if (id.isEmpty()) continue
                     val keep = when (provider) {
                         AiProvider.OPENAI -> id.startsWith("gpt") || id.startsWith("o")
-                        AiProvider.ANTHROPIC, AiProvider.CUSTOM -> true
+                        AiProvider.ANTHROPIC, AiProvider.CUSTOM, AiProvider.OPENROUTER -> true
                         AiProvider.GEMINI -> true
                     }
                     if (keep) ids.add(id)
