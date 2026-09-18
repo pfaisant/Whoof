@@ -1354,7 +1354,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         autoReconnectOnLaunch()
         // Whoof: hybrid link policy (Smart mode idle-disconnect + reconnect on demand).
         com.noop.ble.SmartLink.start(appContext, ble, viewModelScope)
-        viewModelScope.launch { _activeWorkout.collect { com.noop.ble.SmartLink.workoutActive.value = it != null } }
+        // `_activeWorkout` is declared further down the class, so it is still null while this init block
+        // runs (1.3.0 crashed here). Yield once: the constructor finishes on this main-thread task, the
+        // coroutine resumes on the next one with every property initialised.
+        viewModelScope.launch {
+            kotlinx.coroutines.yield()
+            _activeWorkout.collect { com.noop.ble.SmartLink.workoutActive.value = it != null }
+        }
     }
 
     /** Push the persisted BLE-behaviour prefs to the client. The #477 Power-saving levers: the
