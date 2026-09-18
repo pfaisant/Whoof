@@ -43,7 +43,7 @@ import kotlin.math.roundToInt
  * SAME [HeartRateTrendCard] Today used to host, resolved for the logical today.
  */
 @Composable
-fun HeartScreen(viewModel: AppViewModel) {
+fun HeartScreen(viewModel: AppViewModel, onOpenHrvReading: () -> Unit = {}) {
     val context = LocalContext.current
     val today by viewModel.today.collectAsStateWithLifecycle()
     val days by viewModel.recentDays.collectAsStateWithLifecycle()
@@ -94,6 +94,17 @@ fun HeartScreen(viewModel: AppViewModel) {
         fullBleedBackground = screenBackdropFullBleed(showDayCycleBackground, skyBehindCards),
     ) {
         item { LiveBpmHero(bpm = bpm, rhr = rhr, hrv = hrv, maxHr = maxHr, connected = live.connected) }
+        item {
+            // Whoof: the ad-hoc 60-second HRV reading (was on the Live screen).
+            androidx.compose.material3.Button(
+                onClick = onOpenHrvReading,
+                enabled = live.connected,
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Palette.accent, contentColor = Palette.surfaceBase),
+            ) {
+                Text(if (live.connected) "Take an HRV reading" else "Connect the strap to take an HRV reading", style = NoopType.headline)
+            }
+        }
         item {
             HeartRateTrendCard(
                 viewModel = viewModel,

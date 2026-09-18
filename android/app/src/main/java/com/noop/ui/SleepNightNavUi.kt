@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.WbTwilight
+import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -81,18 +83,10 @@ internal fun SleepWindowRow(onsetTs: Long, wakeTs: Long) {
         padding = Metrics.space14,
         tint = Palette.restColor,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SleepTime(icon = Icons.Filled.Bedtime, label = uiString(R.string.l10n_sleep_screen_asleep_b9692bbe), value = asleep)
-            Spacer(Modifier.width(Metrics.space12))
-            Box(
-                modifier = Modifier
-                    .height(30.dp)
-                    .width(Metrics.divider)
-                    .background(Palette.hairline),
-            )
-            Spacer(Modifier.width(Metrics.space12))
-            SleepTime(icon = Icons.Filled.WbSunny, label = uiString(R.string.l10n_sleep_screen_woke_cfbb59a8), value = woke)
-            Spacer(Modifier.weight(1f))
+        // Whoof: asleep on the left, woke on the right, nothing in between.
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            SleepTime(icon = Icons.Outlined.NightsStay, label = uiString(R.string.l10n_sleep_screen_asleep_b9692bbe), value = asleep)
+            SleepTime(icon = Icons.Outlined.WbTwilight, label = uiString(R.string.l10n_sleep_screen_woke_cfbb59a8), value = woke)
         }
     }
 }
@@ -494,9 +488,9 @@ internal fun NightNavHeader(
                     .padding(vertical = Metrics.selectorPadding, horizontal = Metrics.selectorPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(nightLabel, style = NoopType.caption, color = Palette.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(nightLabel, style = NoopType.number(15f, weight = androidx.compose.ui.text.font.FontWeight.Bold), color = Palette.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (dateLabel != null) {
-                    Text(dateLabel, style = NoopType.captionNumber, color = Palette.accentHover, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(dateLabel, style = NoopType.caption, color = Palette.textTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             IconButton(onClick = { if (canGoNewer) onNavigate(offset - 1) }, enabled = canGoNewer) {
@@ -508,14 +502,7 @@ internal fun NightNavHeader(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                timeLabel ?: clock ?: "—",
-                style = NoopType.captionNumber,
-                color = Palette.accent,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (session != null) {
+            if (session != null) {   // Whoof: icons only; the times live in the hero card
                 Spacer(Modifier.width(Metrics.space6))
                 Icon(
                     Icons.Filled.Edit,

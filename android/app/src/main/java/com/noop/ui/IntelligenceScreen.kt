@@ -105,8 +105,7 @@ fun IntelligenceScreen(vm: AppViewModel) {
         title = uiString(R.string.l10n_intelligence_screen_intelligence_c698f940),
     ) {
         item { forecast?.let { ForecastCard(it) } }
-        item { ExplainerCard(effortScale) }
-        item { ModelBreakdownCard(effortScale) }
+        // Whoof: the explainer and the model-weights cards are gone; the forecast and the days remain.
 
         if (ordered.isEmpty()) {
             item {

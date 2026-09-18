@@ -61,10 +61,11 @@ class HostedCardPrefsTest {
     /** Opt-in surface: nothing is hosted until the user adds a card. */
     @Test
     fun default_isEmpty() {
-        assertEquals(emptyList<HostedCard>(), HostedCard.defaultSelection)
-        assertEquals(emptyList<HostedCard>(), HostedCardPrefs.decodeEnabled(null))
-        assertEquals(emptyList<HostedCard>(), HostedCardPrefs.decodeEnabled(""))
-        assertEquals(emptyList<HostedCard>(), HostedCardPrefs.decodeEnabled("   "))
+        // Whoof: the sleep-debt ledger is hosted on Today by default.
+        assertEquals(listOf(HostedCard.SLEEP_DEBT), HostedCard.defaultSelection)
+        assertEquals(listOf(HostedCard.SLEEP_DEBT), HostedCardPrefs.decodeEnabled(null))
+        assertEquals(listOf(HostedCard.SLEEP_DEBT), HostedCardPrefs.decodeEnabled(""))
+        assertEquals(listOf(HostedCard.SLEEP_DEBT), HostedCardPrefs.decodeEnabled("   "))
     }
 
     @Test

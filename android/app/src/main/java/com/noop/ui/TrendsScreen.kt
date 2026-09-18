@@ -192,29 +192,6 @@ fun TrendsScreen(vm: AppViewModel) {
 
         // --- Week-in-review digest (#208) with prev/next week browsing (#710). Past weeks render in the
         // same format; the chevrons stay visible on an empty PAST week so the user can step on. ---
-        item {
-            Column(modifier = Modifier.staggeredAppear(index = 0)) {
-                WeeklyDigestNav(
-                    days = days,
-                    weekOffset = weekOffset,
-                    minWeekOffset = minWeekOffset,
-                    onStep = { delta -> weekOffset = (weekOffset + delta).coerceIn(minWeekOffset, 0) },
-                )
-            }
-        }
-
-        // --- Week in review , the Charge / Effort / Rest trio in NOOP's pip language (PipBar +
-        // CountUpText), mirroring the iOS TrendsView.weekInReview card. White count-up numbers over
-        // segmented count-up bars; self-hides when none of the three carry a window mean. ---
-        item {
-            WeekInReviewCard(
-                charge = recovery,
-                effort = strain,
-                rest = rest,
-                effortScale = effortScale,
-                modifier = Modifier.staggeredAppear(index = 1),
-            )
-        }
 
         // --- Range control ---
         item {
@@ -365,6 +342,31 @@ fun TrendsScreen(vm: AppViewModel) {
             Column(modifier = Modifier.staggeredAppear(index = 6)) {
                 RecoveryHistoryCard(days = days, range = range)
             }
+        }
+
+        // Whoof: Week in Review moved to the bottom.
+        item {
+            Column(modifier = Modifier.staggeredAppear(index = 0)) {
+                WeeklyDigestNav(
+                    days = days,
+                    weekOffset = weekOffset,
+                    minWeekOffset = minWeekOffset,
+                    onStep = { delta -> weekOffset = (weekOffset + delta).coerceIn(minWeekOffset, 0) },
+                )
+            }
+        }
+
+        // --- Week in review , the Charge / Effort / Rest trio in NOOP's pip language (PipBar +
+        // CountUpText), mirroring the iOS TrendsView.weekInReview card. White count-up numbers over
+        // segmented count-up bars; self-hides when none of the three carry a window mean. ---
+        item {
+            WeekInReviewCard(
+                charge = recovery,
+                effort = strain,
+                rest = rest,
+                effortScale = effortScale,
+                modifier = Modifier.staggeredAppear(index = 1),
+            )
         }
 
     }

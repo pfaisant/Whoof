@@ -148,6 +148,7 @@ internal enum class Destination(
     Sleep("sleep", R.string.nav_sleep, Icons.Filled.Bedtime),
     // Whoof: the Today heart-rate thread as its own bottom-bar tab.
     Heart("heart", R.string.nav_heart, Icons.Filled.MonitorHeart),
+    HrvReading("hrv_reading", R.string.l10n_hrv_snapshot_screen_hrv_reading_a2cf71f3, Icons.Filled.MonitorHeart),
     Breathe("breathe", R.string.nav_breathe, Icons.Filled.Air),
     Stress("stress", R.string.nav_stress, Icons.Filled.Spa),
 
@@ -240,16 +241,16 @@ internal val drawerGroups: List<DrawerGroup> = listOf(
         // promoted to a top-level tab — no longer listed under More." Leaving it would have put the
         // same destination in two places at once, which is the duplication the note above says this
         // list exists to avoid. (#2218)
-        Destination.InsightsHub, Destination.Intelligence,
-        Destination.Explore, Destination.Compare,   // Whoof: Insights (journal) removed
+        Destination.Intelligence,   // Whoof: What Moves You (journal-driven) removed
+        Destination.Explore, Destination.Compare,
     ), defaultExpanded = true),
     DrawerGroup("Body", R.string.more_group_body, listOf(
-        Destination.Live, Destination.Workouts, Destination.Health, Destination.VitalSigns,
-        Destination.LabBook, Destination.Stress, Destination.Breathe, Destination.Intervals,
+        Destination.Workouts, Destination.Health, Destination.VitalSigns,   // Whoof: Live folded into Heart, Lab Book removed
+        Destination.Stress, Destination.Breathe, Destination.Intervals,
         Destination.Rhythm,
     ), defaultExpanded = true),
     DrawerGroup("Data", R.string.more_group_data, listOf(
-        Destination.FusedRecord, Destination.AppleHealth, Destination.DataSources,
+        Destination.FusedRecord, Destination.DataSources,   // Whoof: no Apple Health
         Destination.BackupSync, Destination.Devices, Destination.NoopLimitations,
     ), defaultExpanded = false),
     DrawerGroup("App", R.string.more_group_app, listOf(
@@ -680,7 +681,12 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                         onManageDevices = { nav.navigateTopLevel(Destination.Devices.route) },
                     )
                 }
-                composable(Destination.Heart.route) { HeartScreen(viewModel) }
+                composable(Destination.Heart.route) {
+                    HeartScreen(viewModel, onOpenHrvReading = { nav.navigate(Destination.HrvReading.route) })
+                }
+                composable(Destination.HrvReading.route) {
+                    HrvSnapshotScreen(viewModel = viewModel, onClose = { nav.popBackStack() })
+                }
                 composable(Destination.Sleep.route) {
                     SleepScreen(
                         vm = viewModel,

@@ -1055,6 +1055,17 @@ fun SettingsScreen(
                     }
                 }
                 SettingsRowDivider()
+                // Whoof: waist unlocks the VO₂ max estimate (Nes formula) on Today and Trends.
+                SettingsFormRow(label = "Waist (for VO₂ max)") {
+                    StepperField(
+                        value = if (profile.waistCm > 0) "%.0f".format(profile.waistCm) else "—",
+                        unit = "cm",
+                        accessibility = "Waist circumference in centimetres",
+                        onMinus = { mutate { profile.waistCm = (if (profile.waistCm > 0) profile.waistCm else 90.0) - 1 } },
+                        onPlus = { mutate { profile.waistCm = (if (profile.waistCm > 0) profile.waistCm else 90.0) + 1 } },
+                    )
+                }
+                SettingsRowDivider()
                 // Waist (optional): the one extra body measure that unlocks the Fitness Age VO₂max
                 // estimate. Unset (0) by design — the headline Fitness Age never needs it — so it shows
                 // "Add" until entered, then steps like Height (inches in imperial, cm in metric).

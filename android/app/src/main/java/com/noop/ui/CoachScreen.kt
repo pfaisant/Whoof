@@ -8,6 +8,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -96,20 +101,22 @@ fun CoachScreen(vm: CoachViewModel = viewModel(), onOpenSettings: () -> Unit = {
     val showDayCycleBackground = remember { NoopPrefs.showDayCycleBackground(context) }
     val skyBehindCards = remember { NoopPrefs.skyBehindCards(context) }
 
-    ScreenScaffold(
-        title = null,   // Whoof: the bottom bar already says Coach
-        // LIQUID SKY BACKDROP (the pilot pattern — LiquidScreenSky.kt): the liquid sky sits behind the
-        // header and the cards float over the flat canvas below. Reuses the shared LiquidScreenSky() slot
-        // verbatim; when the day-cycle background is off, the scaffold paints the plain surface instead.
-        topBackground = screenBackdropSlot(showDayCycleBackground, skyBehindCards),
-        // Sky-behind-cards fills the viewport so the transparent cards reveal the sky the whole way
-        // down (Today / Trends / Sleep / metric-detail parity - same two prefs, same two behaviours).
-        fullBleedBackground = screenBackdropFullBleed(showDayCycleBackground, skyBehindCards),
-    ) {
-        if (!configured) {
-            CoachSetup(vm = vm)
-        } else {
-            CoachChat(vm = vm, onOpenSettings = onOpenSettings)
+    // Whoof: a classic chat layout — messages scroll, the composer stays pinned at the bottom.
+    Box(modifier = Modifier.fillMaxSize().background(Palette.surfaceBase)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .imePadding()
+                .padding(horizontal = Metrics.screenPadding),
+        ) {
+            if (!configured) {
+                Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 16.dp)) {
+                    CoachSetup(vm = vm)
+                }
+            } else {
+                CoachChat(vm = vm, onOpenSettings = onOpenSettings)
+            }
         }
     }
 }
@@ -295,8 +302,11 @@ private fun CoachChat(vm: CoachViewModel, onOpenSettings: () -> Unit) {
         draftPrefs.edit().remove("draft").apply()
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val scroll = rememberScrollState()
+    LaunchedEffect(messages.size, sending) { scroll.animateScrollTo(scroll.maxValue) }
+    Column(modifier = Modifier.fillMaxSize()) {
         // Header row: model chip (→ settings) · clear.
+        Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val chipInteraction = remember { MutableInteractionSource() }
             Row(
@@ -350,6 +360,10 @@ private fun CoachChat(vm: CoachViewModel, onOpenSettings: () -> Unit) {
             )
         }
 
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
         if (messages.isEmpty()) {
             // Empty thread: a greeting and the suggestions as tappable cards, two per row. A tap SENDS.
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -388,6 +402,8 @@ private fun CoachChat(vm: CoachViewModel, onOpenSettings: () -> Unit) {
             }
         }
 
+        }   // end scrolling thread
+
         val errorMsg = error
         if (errorMsg != null) {
             Text(errorMsg, style = NoopType.footnote, color = Palette.statusCritical)
@@ -415,6 +431,7 @@ private fun CoachChat(vm: CoachViewModel, onOpenSettings: () -> Unit) {
             sending = sending,
             onSend = { send(input) },
         )
+        Spacer(Modifier.height(10.dp))
     }
 }
 

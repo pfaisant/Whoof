@@ -33,8 +33,8 @@ android {
         applicationId = "cc.pfa87.whoof"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.3.1"
+        versionCode = 6
+        versionName = "1.4.0"
 
         buildConfigField("String", "OPENROUTER_API_KEY", whoofKey("OPENROUTER_API_KEY"))
         buildConfigField("String", "GEMINI_API_KEY", whoofKey("GEMINI_API_KEY"))

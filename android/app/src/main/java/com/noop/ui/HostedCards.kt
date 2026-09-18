@@ -92,7 +92,7 @@ enum class HostedCard(
         fun fromRaw(raw: String?): HostedCard? = entries.firstOrNull { it.raw == raw }
 
         /** The default selection: EMPTY. Nothing is hosted until the user opts in. Mirrors iOS. */
-        val defaultSelection: List<HostedCard> = emptyList()
+        val defaultSelection: List<HostedCard> = listOf(SLEEP_DEBT)   // Whoof: sleep debt on Today by default
 
         /** Canonical order used to list the not-yet-hosted remainder in the editor (matches iOS allCases). */
         val canonicalOrder: List<HostedCard> = entries.toList()

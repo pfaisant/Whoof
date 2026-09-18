@@ -42,9 +42,9 @@ enum class KeyMetric(val raw: String, @StringRes val titleRes: Int) {
         fun fromRaw(raw: String?): KeyMetric? = entries.firstOrNull { it.raw == raw }
 
         /** The original, hard-coded grid order — the default when the layout isn't customised. */
+        // Whoof: the hero rings and the Vitals card already show Recovery/Strain/Sleep and HRV/RHR/resp.
         val defaultOrder: List<KeyMetric> = listOf(
-            CHARGE, EFFORT, REST, HRV, RESTING_HR,
-            BLOOD_OXYGEN, RESPIRATORY, STEPS, WEIGHT, CALORIES,
+            BLOOD_OXYGEN, STEPS, CALORIES, WEIGHT,
         )
     }
 }

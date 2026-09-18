@@ -84,6 +84,7 @@ fun SmartAlarmScreen(vm: AppViewModel) {
         title = uiString(R.string.l10n_smart_alarm_screen_alarms_131dd3d6),
     ) {
         // The guaranteed-wake card always shows so the safety promise is the first thing read.
+        item { ExplanationCard() }   // Whoof: what the three alarms are, before the controls
         item {
             // #1858: the card names a specific time ("a backup alarm is set for 04:45"), so with per-day
             // wake times it has to show the NEXT one rather than the default — on a day whose time was
@@ -222,7 +223,6 @@ fun SmartAlarmScreen(vm: AppViewModel) {
         // #821: the "how the smart wake works" explainer sat in the MIDDLE of the page (between the wake-alarm
         // settings and the strap alarm), which read as an interruption. It's reference detail, not a control,
         // so it belongs at the BOTTOM after every alarm/reminder control, moved here.
-        item { ExplanationCard() }
     }
 }
 
@@ -420,26 +420,12 @@ private fun WindDownCard(vm: AppViewModel) {
 
 @Composable
 private fun ExplanationCard() {
-    NoopCard(padding = 20.dp) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Bedtime, contentDescription = null, tint = Palette.accent)
-                Spacer(Modifier.width(10.dp))
-                Text(uiString(R.string.l10n_smart_alarm_screen_how_the_smart_wake_works_8cf34930), style = NoopType.headline, color = Palette.textPrimary)
-            }
-            Text(
-                uiString(R.string.l10n_smart_alarm_screen_while_you_re_inside_the_window_8700ca3b) +
-                    " sleep sits near your nightly low and stays steady; when your heart rate lifts above " +
-                    "that (a sign you're sleeping more lightly or starting to stir), NOOP wakes you a " +
-                    "little early so you come up from a lighter phase.",
-                style = NoopType.footnote, color = Palette.textSecondary,
-            )
-            Text(
-                uiString(R.string.l10n_smart_alarm_screen_this_is_a_coarse_cue_from_d6bbabe7) +
-                    " isn't streaming (Bluetooth off, not worn, app killed), no early wake happens and the " +
-                    "guaranteed alarm at the window's end still wakes you.",
-                style = NoopType.footnote, color = Palette.textTertiary,
-            )
+    NoopCard(padding = 16.dp) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Three different things", style = NoopType.headline, color = Palette.textPrimary)
+            Text("• Wake window (phone): a phone alarm with a window. Inside the window, if your heart rate lifts off its night low, the phone wakes you early, in lighter sleep. The end of the window always rings.", style = NoopType.footnote, color = Palette.textSecondary)
+            Text("• Strap wake alarm: a silent vibration stored in the strap itself. It fires even with the phone off or Bluetooth away; it does not know your sleep stage.", style = NoopType.footnote, color = Palette.textSecondary)
+            Text("• Wind-down nudge: an evening notification counted back from your wake time and sleep need, so you know when to head to bed.", style = NoopType.footnote, color = Palette.textSecondary)
         }
     }
 }

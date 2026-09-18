@@ -317,7 +317,7 @@ object NoopPrefs {
      *  `PuffinExperiment.banisterEffortKey`. */
     const val KEY_BANISTER_EFFORT = "noop.banisterEffort"
 
-    fun banisterEffort(context: Context): Boolean = of(context).getBoolean(KEY_BANISTER_EFFORT, false)
+    fun banisterEffort(context: Context): Boolean = of(context).getBoolean(KEY_BANISTER_EFFORT, true)   // Whoof: accrues from any HR above resting, like WHOOP
 
     /** The TRIMP recipe every Effort computation on this device should use. */
     fun effortMethod(context: Context): com.noop.analytics.StrainScorer.Method =
@@ -820,7 +820,7 @@ object NoopPrefs {
     const val KEY_HC_LAST_SYNC = "noop.hcLastSync"
 
     fun hcAutoSync(context: Context): Boolean =
-        of(context).getBoolean(KEY_HC_AUTO_SYNC, false)
+        of(context).getBoolean(KEY_HC_AUTO_SYNC, true)   // Whoof: phone steps etc. flow in by default
 
     fun setHcAutoSync(context: Context, enabled: Boolean) {
         of(context).edit().putBoolean(KEY_HC_AUTO_SYNC, enabled).apply()

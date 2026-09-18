@@ -100,6 +100,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shadow
@@ -1842,7 +1843,7 @@ fun TodayScreen(
                         // The three hero vitals, HRV / Resting HR / Respiratory. Carried day (#543).
                         TodaySection.RECOVERY_VITALS -> Box(modifier = Modifier.fillMaxWidth().staggeredAppear(stagger)) {
                             HeroMetricRows(day = displayMetric, carriedDay = lastScoredRecoveryDay,
-                                           vitalsDay = lastVitalsDay, onOpenMetric = onOpenMetric)
+                                           vitalsDay = lastVitalsDay, days = days, onOpenMetric = onOpenMetric)
                         }
                         // YOUR CARDS, the user-customisable dashboard (WHOOP "My Dashboard"). Hydration is
                         // hidden when its tracking is OFF (the editor still offers it, so the choice
@@ -2639,20 +2640,12 @@ private fun LiquidTodayHeader(
                 .semantics { contentDescription = uiString(R.string.l10n_today_screen_daytitle_humandate_tap_to_pick_a_7e12ce96, dayTitle, humanDate) },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            // Whoof: the date alone; "Today" is implied by the tab.
             Text(
-                dayTitle,
-                // ~28sp Bold rounded, matching iOS `StrandFont.rounded(28)`. A soft shadow so it reads on the
-                // day-of-sky. NoopType.number is the house tabular sans; Bold at 28 is the display day title.
-                style = NoopType.number(28f, weight = FontWeight.Bold)
+                if (dayTitle.equals("Today", ignoreCase = true)) humanDate else "$dayTitle · $humanDate",
+                style = NoopType.number(22f, weight = FontWeight.Bold)
                     .copy(shadow = Shadow(color = Color.Black.copy(alpha = 0.4f), offset = Offset(0f, 1f), blurRadius = 10f)),
                 color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                humanDate,
-                style = NoopType.caption.copy(shadow = Shadow(color = Color.Black.copy(alpha = 0.35f), offset = Offset(0f, 1f), blurRadius = 8f)),
-                color = Color.White.copy(alpha = 0.78f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -3685,6 +3678,7 @@ private fun HeroMetricRows(
     day: DailyMetric?,
     carriedDay: DailyMetric? = null,
     vitalsDay: DailyMetric? = null,
+    days: List<DailyMetric> = emptyList(),
     // #706/#684: the same `vital_detail/<key>` trends the HRV / Resting HR / Respiratory dashboard cards
     // open. These three rows show the SAME metrics and had no way through, so the summary card was the one
     // place on Today where a metric was a dead end. Keys come from `dashboardCardMetricKey`, so the two
@@ -3709,10 +3703,19 @@ private fun HeroMetricRows(
     // iOS `recoveryVitalsSection`: a frosted card with a "RECOVERY VITALS" header + a "last night · <date>"
     // on the right, then three `vitalRow`s (26dp mini LIQUID RING + label + value). NoopCard supplies the
     // same neutral surfaceRaised + hairline as iOS's frosted card. Inner spacing 12, matching iOS.
-    NoopCard(padding = Metrics.space16) {
+    // Whoof: colour each vital against its 14-day median — green on/above form, sliding to red.
+    val recent = days.takeLast(14)
+    fun median(xs: List<Double>): Double? = xs.sorted().let { if (it.isEmpty()) null else it[it.size / 2] }
+    val hrvBase = median(recent.mapNotNull { it.avgHrv })
+    val rhrBase = median(recent.mapNotNull { it.restingHr?.toDouble() })
+    val respBase = median(recent.mapNotNull { it.respRateBpm })
+    val hrvTint = vitalTint(hrv?.let { v -> hrvBase?.let { b -> (v / b - 0.75) / 0.25 } })
+    val rhrTint = vitalTint(rhr?.let { v -> rhrBase?.let { b -> (1.0 - (v / b - 1.0) / 0.12) } })
+    val respTint = vitalTint(resp?.let { v -> respBase?.let { b -> 1.0 - (kotlin.math.abs(v - b) - 0.5) / 2.0 } })
+    NoopCard(padding = Metrics.space12) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(Metrics.space12),
+            verticalArrangement = Arrangement.spacedBy(Metrics.space6),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Overline(uiString(R.string.today_section_recovery_vitals), modifier = Modifier.weight(1f))
@@ -3720,7 +3723,7 @@ private fun HeroMetricRows(
             HeroVitalRow(
                 label = uiString(R.string.l10n_today_screen_heart_rate_variability_a137586d),
                 value = hrv?.let { "${it.roundToInt()} ms" } ?: NO_DATA,
-                tint = Palette.metricCyan,
+                tint = hrvTint,
                 fraction = hrv?.let { (it / 120.0).coerceIn(0.0, 1.0) },
                 metricKey = dashboardCardMetricKey(DashboardCard.HRV),
                 onOpenMetric = onOpenMetric,
@@ -3728,7 +3731,7 @@ private fun HeroMetricRows(
             HeroVitalRow(
                 label = uiString(R.string.l10n_today_screen_resting_heart_rate_348928d6),
                 value = rhr?.let { "$it bpm" } ?: NO_DATA,
-                tint = Palette.metricRose,
+                tint = rhrTint,
                 fraction = rhr?.let { (it / 100.0).coerceIn(0.0, 1.0) },
                 metricKey = dashboardCardMetricKey(DashboardCard.RESTING_HR),
                 onOpenMetric = onOpenMetric,
@@ -3736,7 +3739,7 @@ private fun HeroMetricRows(
             HeroVitalRow(
                 label = uiString(R.string.l10n_today_screen_breaths_per_minute_2b197c54),
                 value = resp?.let { String.format(Locale.getDefault(), "%.1f rpm", it) } ?: NO_DATA,
-                tint = Palette.accent,
+                tint = respTint,
                 fraction = resp?.let { (it / 24.0).coerceIn(0.0, 1.0) },
                 metricKey = dashboardCardMetricKey(DashboardCard.RESPIRATORY),
                 onOpenMetric = onOpenMetric,
@@ -3750,6 +3753,14 @@ private fun HeroMetricRows(
             }
         }
     }
+}
+
+/** Whoof: 0 → red, 0.5 → amber, 1 → green; null (no baseline) → neutral cyan. */
+private fun vitalTint(score: Double?): Color {
+    if (score == null) return Palette.metricCyan
+    val t = score.coerceIn(0.0, 1.0).toFloat()
+    return if (t < 0.5f) lerp(Palette.statusCritical, Palette.statusWarning, t / 0.5f)
+    else lerp(Palette.statusWarning, Palette.statusPositive, (t - 0.5f) / 0.5f)
 }
 
 /** iOS `lastNightLine` — "Last night · <date>" where <date> is yesterday in "d MMM" form. */
@@ -5293,8 +5304,8 @@ internal fun ChargeBreakdownSheet(
             ) {
                 // The breakdown self-gates: a calibrating night (empty drivers) renders nothing here, the
                 // Contributors + Readiness below still give an honest read, never a blank sheet.
-                RecoveryDriversSection(days = days, displayDay = displayDay, carriedDay = carriedDay)
                 RecoveryContributorsSection(day = displayDay, carriedDay = carriedDay)
+                RecoveryDriversSection(days = days, displayDay = displayDay, carriedDay = carriedDay)
                 // S4: the SEPARATE Readiness block now lives here behind the Charge-ring tap (today-only,
                 // matching the old inline gate). A one-word read (Push / Maintain / Rest) stays on the hero.
                 if (showReadiness) ReadinessSection(days, carriedDay = carriedDay)
@@ -5431,7 +5442,7 @@ private fun RecoveryDriversSection(
             horizontalArrangement = Arrangement.spacedBy(Metrics.space8),
         ) {
             Box(modifier = Modifier.weight(1f)) {
-                SectionHeader(uiString(R.string.today_what_shaped_it), overline = overline, trailing = uiString(R.string.today_vs_your_baseline))
+                Overline(uiString(R.string.today_what_shaped_it) + " · " + uiString(R.string.today_vs_your_baseline))
             }
             ChargeConfidencePill(tier)
         }
@@ -5572,7 +5583,7 @@ private fun RecoveryContributorsSection(day: DailyMetric?, carriedDay: DailyMetr
 
     val overline = carriedDay?.let { uiString(R.string.today_recovery_carried, carriedCaption(it.day).localized()) }
         ?: uiString(R.string.l10n_today_screen_recovery_ea924f72)
-    SectionHeader(uiString(R.string.today_contributors), overline = overline, trailing = uiString(R.string.today_what_drove_charge))
+    Overline(uiString(R.string.today_contributors))
     NoopCard {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space16)) {
             // HRV, higher is better; map a typical 20–120 ms span. Teal (its biometric hue; iOS metricCyan).
@@ -6573,8 +6584,7 @@ internal fun HeartRateTrendCard(
     // too-narrow rolling window (say 1h with no recent offload) is never a dead end — the user widens it
     // or steps back to Today, and the message says which window came up empty.
     if (winBuckets.size < 2) {
-        SectionHeader(uiString(R.string.today_section_heart_rate), overline = selectedLabel)
-        NoopCard {
+            NoopCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Overline(uiString(R.string.today_hr_beats_per_minute))
                 if (selectedDay == today) {
@@ -6636,7 +6646,6 @@ internal fun HeartRateTrendCard(
     }
     val visTimestamps = remember(visBuckets) { visBuckets.map { it.bucket } }
 
-    SectionHeader(uiString(R.string.today_section_heart_rate), overline = selectedLabel)
     NoopCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // Header, mirrors the macOS ChartCard (title + subtitle, trailing read-out).
@@ -6657,7 +6666,6 @@ internal fun HeartRateTrendCard(
                         color = Palette.textTertiary,
                     )
                 }
-                Text(uiString(R.string.l10n_today_screen_latest_bpm_e7bec767, latest), style = NoopType.chartValueLarge, color = Palette.metricRose)
             }
             // #985: the window selector, current day only — Today (since midnight, the default) or a
             // rolling last-N-hours cut of the same loaded buckets. A past day has no "now" → no selector.
@@ -6748,13 +6756,7 @@ internal fun HeartRateTrendCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    if (hrZoom == null) uiString(R.string.timeline_pinch_to_zoom)
-                    else uiString(R.string.today_hr_zoomed_hint),
-                    style = NoopType.footnote,
-                    color = Palette.textTertiary,
-                    modifier = Modifier.weight(1f),
-                )
+                Spacer(Modifier.weight(1f))   // Whoof: no gesture tutorial
                 if (hrZoom != null) {
                     Text(
                         uiString(R.string.l10n_today_screen_reset_44c57abd),
