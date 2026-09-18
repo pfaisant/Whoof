@@ -50,6 +50,8 @@ class NoopApplication : Application() {
         // #1008: pin the pre-change Overnight-only default for existing installs before anything
         // reads it. Idempotent; a no-op on fresh installs and on every launch after the first.
         com.noop.ui.NoopPrefs.migrateContinuousHrvOvernightDefault(this)
+        com.noop.analytics.SleepTuning.apply(this)   // Whoof: user-tuned stager knobs
+        com.noop.ble.SmartLink.ensureScheduled(this) // Whoof: periodic short syncs in Smart mode
         // #2185: a stress widget placed by an older version fired its `onEnabled` long before the
         // scheduler existed, so the receiver hook alone would never reach it. Enqueued with KEEP, so
         // this is a no-op once a schedule exists, and the worker retires itself when no widget is

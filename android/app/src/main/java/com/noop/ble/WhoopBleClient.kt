@@ -3135,6 +3135,12 @@ class WhoopBleClient(
         schedulePostBackfillAnalysis()
     }
 
+    /** Whoof: force a re-score pass now (SleepTuning changed, or a manual "recompute"). */
+    fun rescoreNow() {
+        com.noop.ui.NoopPrefs.setAnalyzeWatermark(context, "")
+        schedulePostBackfillAnalysis()
+    }
+
     private fun schedulePostBackfillAnalysis() {
         if (!analyzeAfterBackfillScheduled.compareAndSet(false, true)) {
             // A later chunk arrived while the debounce or scoring pass was already active. Remember it:

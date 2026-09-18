@@ -1352,6 +1352,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Reconnect to the strap we last bonded to, so the user doesn't have to tap Connect after an
         // app update / restart (#67). Self-gates on the keep-connected pref + a saved strap + permission.
         autoReconnectOnLaunch()
+        // Whoof: hybrid link policy (Smart mode idle-disconnect + reconnect on demand).
+        com.noop.ble.SmartLink.start(appContext, ble, viewModelScope)
+        viewModelScope.launch { _activeWorkout.collect { com.noop.ble.SmartLink.workoutActive.value = it != null } }
     }
 
     /** Push the persisted BLE-behaviour prefs to the client. The #477 Power-saving levers: the
@@ -2276,6 +2279,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // MARK: - Strap controls (thin pass-throughs to the BLE client)
 
     fun connect(promoteService: Boolean = true) {
+        com.noop.ble.SmartLink.userTookOver()
         // An explicit user-driven Connect must start the reconnect schedule fresh — never inherit a
         // backoff delay accumulated by a prior involuntary-reconnect loop (#48, iOS connect() parity).
         ble.resetReconnectBackoff()
@@ -2303,6 +2307,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() {
+        com.noop.ble.SmartLink.userTookOver()
         // User asked to disconnect: drop the foreground promotion first, then the link itself.
         WhoopConnectionService.stop(appContext)
         ble.disconnect()
@@ -2377,6 +2382,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * while a strap is live promotes to the foreground immediately; turning it off drops the
      * foreground service (the connection stays up until the app is actually closed).
      */
+    /** Whoof: pick the link policy. ALWAYS re-promotes the service if a strap is live; OFF drops it. */
+    fun setBackgroundMode(mode: com.noop.ble.BackgroundMode) {
+        NoopPrefs.setBackgroundMode(appContext, mode)
+        com.noop.ble.SmartLink.userTookOver()
+        when (mode) {
+            com.noop.ble.BackgroundMode.OFF -> WhoopConnectionService.stop(appContext)
+            else -> if (ble.state.value.connected || ble.state.value.bonded) WhoopConnectionService.start(appContext)
+        }
+        if (mode == com.noop.ble.BackgroundMode.SMART) com.noop.ble.SmartLink.ensureScheduled(appContext)
+        ble.setKeepStreamForData(continuousHrvEffective())
+    }
+
+    /** Whoof: re-run sleep/recovery scoring over recent days with the current SleepTuning knobs. */
+    fun recomputeNightsNow() {
+        NoopPrefs.setAnalyzeWatermark(appContext, "")
+        ble.rescoreNow()
+    }
+
     fun setBackgroundConnection(enabled: Boolean) {
         NoopPrefs.setBackgroundConnection(appContext, enabled)
         if (enabled) {
@@ -2608,6 +2631,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  blanks the stale smoothing window so a resume shows "—" until a fresh sample lands (#46).
      *  Guarded on 0→1 so a second concurrent HR screen doesn't re-clear an already-live window. */
     fun requestRealtimeHr() {
+        com.noop.ble.SmartLink.liveWanters.value = realtimeWanters + 1
         if (realtimeWanters++ == 0) {
             resetSmoothing()
             ble.startRealtime()
@@ -2617,6 +2641,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A live-HR screen went away. Stops the realtime stream only when the last one leaves. */
     fun releaseRealtimeHr() {
         realtimeWanters = (realtimeWanters - 1).coerceAtLeast(0)
+        com.noop.ble.SmartLink.liveWanters.value = realtimeWanters
         if (realtimeWanters == 0) ble.stopRealtime()
     }
 

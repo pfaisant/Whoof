@@ -1980,10 +1980,10 @@
          and a NotificationCompat builder chain matches none of its Compose patterns, so the gate could
          not see it. postNotification's dedupe key now includes the locale — without that, these would
          keep the previous language until the connection or battery state happened to change. -->
-    <string name="fgs_title_reconnecting">Reconnecting to your WHOOP…</string>
-    <string name="fgs_title_syncing">Syncing strap history…</string>
-    <string name="fgs_title_connected">Connected to your WHOOP</string>
-    <string name="fgs_detail_streaming">Streaming in the background</string>
+    <string name="fgs_title_reconnecting">Whoof · reconnecting…</string>
+    <string name="fgs_title_syncing">Whoof · syncing…</string>
+    <string name="fgs_title_connected">Whoof · live</string>
+    <string name="fgs_detail_streaming">Strap linked</string>
     <string name="fgs_detail_keeping_link">Keeping the link open</string>
     <string name="fgs_detail_recovery">Recovery %1$d%%</string>
     <string name="fgs_detail_battery">Strap %1$d%%</string>

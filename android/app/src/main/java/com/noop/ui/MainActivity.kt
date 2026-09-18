@@ -507,12 +507,43 @@ object NoopPrefs {
         of(context).edit().putString(KEY_STEPS_MOTION_CACHE, payload).apply()
     }
 
-    /** Whether NOOP should hold the strap connection open via a foreground service. Default true. */
+    /** Whether NOOP should hold the strap connection open via a foreground service. Whoof: derived from
+     *  [backgroundMode] — anything but OFF counts as "on" for the code paths that only ask yes/no. */
     fun backgroundConnection(context: Context): Boolean =
-        of(context).getBoolean(KEY_BACKGROUND_CONNECTION, true)
+        backgroundMode(context) != com.noop.ble.BackgroundMode.OFF
 
     fun setBackgroundConnection(context: Context, enabled: Boolean) {
-        of(context).edit().putBoolean(KEY_BACKGROUND_CONNECTION, enabled).apply()
+        setBackgroundMode(context, if (enabled) com.noop.ble.BackgroundMode.SMART else com.noop.ble.BackgroundMode.OFF)
+    }
+
+    // Whoof: hybrid link policy. ALWAYS = upstream behaviour (permanent foreground service);
+    // SMART = live link only while something needs it (screen open, live screen, workout, offload, night on
+    // a strap whose history offload is empty), then idle-disconnect + periodic short syncs; OFF = manual.
+    const val KEY_BACKGROUND_MODE = "whoof.backgroundMode"
+    const val KEY_SMART_IDLE_MINUTES = "whoof.smartIdleMinutes"
+    const val KEY_STRAP_HISTORY_EMPTY = "whoof.strapHistoryEmpty"
+    fun backgroundMode(context: Context): com.noop.ble.BackgroundMode {
+        val raw = of(context).getString(KEY_BACKGROUND_MODE, null)
+        if (raw == null) {
+            // Migrate the old boolean once: an explicit OFF stays OFF, everything else becomes SMART.
+            val legacyOn = of(context).getBoolean(KEY_BACKGROUND_CONNECTION, true)
+            return if (legacyOn) com.noop.ble.BackgroundMode.SMART else com.noop.ble.BackgroundMode.OFF
+        }
+        return com.noop.ble.BackgroundMode.fromRaw(raw)
+    }
+    fun setBackgroundMode(context: Context, mode: com.noop.ble.BackgroundMode) {
+        of(context).edit().putString(KEY_BACKGROUND_MODE, mode.raw)
+            .putBoolean(KEY_BACKGROUND_CONNECTION, mode != com.noop.ble.BackgroundMode.OFF).apply()
+    }
+    fun smartIdleMinutes(context: Context): Int = of(context).getInt(KEY_SMART_IDLE_MINUTES, 15).coerceIn(2, 120)
+    fun setSmartIdleMinutes(context: Context, minutes: Int) {
+        of(context).edit().putInt(KEY_SMART_IDLE_MINUTES, minutes.coerceIn(2, 120)).apply()
+    }
+    /** True once a connected strap has shown a sustained empty history offload (5/MG experimental
+     *  firmware): the night then has to be streamed live, so Smart mode keeps the link at night. */
+    fun strapHistoryEmpty(context: Context): Boolean = of(context).getBoolean(KEY_STRAP_HISTORY_EMPTY, false)
+    fun setStrapHistoryEmpty(context: Context, empty: Boolean) {
+        of(context).edit().putBoolean(KEY_STRAP_HISTORY_EMPTY, empty).apply()
     }
 
     /** Whether NOOP keeps the dense realtime HR stream armed 24/7 for continuous HRV capture. Default
@@ -1526,6 +1557,9 @@ fun NoopRoot() {
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 appViewModel.ble.onForeground()
             }
+            // Whoof: SmartLink demand signal — on screen keeps the live link, off screen starts the idle clock.
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) com.noop.ble.SmartLink.appForeground.value = true
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) com.noop.ble.SmartLink.appForeground.value = false
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }

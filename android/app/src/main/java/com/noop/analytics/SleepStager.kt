@@ -210,7 +210,7 @@ object SleepStager {
     const val minWindowSamples: Int = 3
 
     /** A run is HR-confirmed only if mean HR ≤ baseline × this. */
-    const val hrSleepBaselineMult: Double = 1.05
+    @JvmStatic var hrSleepBaselineMult: Double = 1.05   // Whoof: tunable (SleepTuning)
 
     // ── Motion-corroborated wake (elevated-but-flat-HR nights, #462) ───────────
     //
@@ -251,7 +251,7 @@ object SleepStager {
     const val hrRefineMinSamples: Int = 30
 
     /** Consecutive sleep epochs required to declare onset. */
-    const val onsetPersistEpochs: Int = 3
+    @JvmStatic var onsetPersistEpochs: Int = 3   // Whoof: tunable (SleepTuning)
 
     // ── Off-wrist backstop (#500) ─────────────────────────────────────────────
     //
@@ -322,7 +322,7 @@ object SleepStager {
      * baseline × this. Reuses the overnight HR-confirmation multiplier so the band is the same one
      * detectSleep already trusts to confirm a run.
      */
-    const val hrSleepBandMult: Double = hrSleepBaselineMult
+    val hrSleepBandMult: Double get() = hrSleepBaselineMult   // Whoof: follows the tunable
 
     /**
      * When sparse, two adjacent sleep runs separated ONLY by a gravity gap up to this many minutes
@@ -330,7 +330,7 @@ object SleepStager {
      * into sub-minSleepMin fragments by gravity dropouts. Sized at the daytime-nap floor (a real
      * continuous night never has a true >90 min wake bridge mid-sleep).
      */
-    const val sparseBridgeGapMin: Int = 90
+    @JvmStatic var sparseBridgeGapMin: Int = 90   // Whoof: tunable (SleepTuning)
 
     /**
      * A single intervening ACTIVE run up to this long may be absorbed when bridging two sleep runs

@@ -156,7 +156,7 @@ object SleepStageTotals {
     /** Adjacent sleep runs separated by a wake gap shorter than this (minutes) are bridged into one block
      *  for selection, so a biphasic / briefly-interrupted main sleep is scored as one night. Matches the
      *  research's <60 min "same sleep period" threshold. Mirrors Swift `gapBridgeMaxMin`. (#547) */
-    const val GAP_BRIDGE_MAX_MIN = 60
+    @JvmStatic var GAP_BRIDGE_MAX_MIN = 60   // Whoof: tunable (SleepTuning)
 
     /** Wider wake-gap bridge (minutes) applied ONLY to an overnight night-tail fragment, so a single
      *  overnight sleep broken by a real but longer mid-night wake (>= [GAP_BRIDGE_MAX_MIN], < this) is not

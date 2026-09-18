@@ -776,7 +776,7 @@ class WhoopConnectionService : Service() {
             .setSilent(true)
             .setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
     }
@@ -822,7 +822,7 @@ class WhoopConnectionService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.fgs_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
+                NotificationManager.IMPORTANCE_MIN,   // Whoof: collapsed into the "silent" tray, no status-bar icon
             ).apply {
                 description = getString(R.string.fgs_channel_desc)
                 setShowBadge(false)
@@ -851,7 +851,7 @@ class WhoopConnectionService : Service() {
          *  drives the collector it sits in. */
         private val STRESS_RESCORE_INTERVAL_MS = StressWidgetProducer.RESCORE_INTERVAL_MS
 
-        private const val CHANNEL_ID = "noop_strap_connection"
+        private const val CHANNEL_ID = "whoof_strap_link_min"
         private const val NOTIF_ID = 4201
         const val ACTION_STOP = "com.noop.ble.action.STOP_CONNECTION"
 

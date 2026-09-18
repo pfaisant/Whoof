@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -2122,38 +2123,45 @@ fun SettingsScreen(
 
                 // Keep streaming when the app is closed (Android foreground service). On Mac, NOOP
                 // already keeps your strap connected from the menu bar — just close the window.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            uiString(R.string.l10n_settings_screen_keep_connected_in_the_background_44499d45),
-                            style = NoopType.subhead,
-                            color = Palette.textPrimary,
-                        )
-                        Text(
-                            uiString(R.string.l10n_settings_screen_keeps_streaming_from_your_strap_with_d31b4af9),
-                            style = NoopType.footnote,
-                            color = Palette.textTertiary,
+                // Whoof: hybrid link policy.
+                var linkMode by remember { mutableStateOf(NoopPrefs.backgroundMode(context)) }
+                var idleMinutes by remember { mutableStateOf(NoopPrefs.smartIdleMinutes(context)) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Background link", style = NoopType.subhead, color = Palette.textPrimary)
+                    SegmentedPillControl(
+                        items = com.noop.ble.BackgroundMode.entries,
+                        selection = linkMode,
+                        label = { it.label },
+                        onSelect = {
+                            linkMode = it
+                            backgroundConnection = it != com.noop.ble.BackgroundMode.OFF
+                            vm.setBackgroundMode(it)
+                        },
+                    )
+                    Text(
+                        when (linkMode) {
+                            com.noop.ble.BackgroundMode.ALWAYS -> "Permanent link and notification. Every beat streamed, like before."
+                            com.noop.ble.BackgroundMode.SMART -> "Live while a screen, workout or the night needs it; otherwise the link drops after the idle time and a short sync runs every 30 min. The notification only shows while linked."
+                            com.noop.ble.BackgroundMode.OFF -> "Connect by hand. Nothing runs when the app is closed."
+                        },
+                        style = NoopType.footnote, color = Palette.textTertiary,
+                    )
+                    if (linkMode == com.noop.ble.BackgroundMode.SMART) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Idle before dropping the link", style = NoopType.footnote, color = Palette.textSecondary)
+                            Text("$idleMinutes min", style = NoopType.footnote, color = Palette.accent)
+                        }
+                        Slider(
+                            value = idleMinutes.toFloat(),
+                            onValueChange = { idleMinutes = it.roundToInt() },
+                            onValueChangeFinished = { NoopPrefs.setSmartIdleMinutes(context, idleMinutes) },
+                            valueRange = 5f..60f,
+                            steps = 10,
+                            colors = SliderDefaults.colors(thumbColor = Palette.accent, activeTrackColor = Palette.accent, inactiveTrackColor = Palette.surfaceInset),
                         )
                     }
-                    Switch(
-                        checked = backgroundConnection,
-                        onCheckedChange = {
-                            backgroundConnection = it
-                            vm.setBackgroundConnection(it)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Palette.surfaceBase,
-                            checkedTrackColor = Palette.accent,
-                            uncheckedThumbColor = Palette.textSecondary,
-                            uncheckedTrackColor = Palette.surfaceInset,
-                            uncheckedBorderColor = Palette.hairline,
-                        ),
-                    )
                 }
+                SettingsRowDivider()
 
                 // "Faster history sync" (#533, EXPERIMENTAL): asks Android for a shorter GATT connection
                 // interval for the BOUNDED historical-offload burst only. Off by default — BLE behaviour
@@ -3355,6 +3363,69 @@ fun SettingsScreen(
         // Recalibrate re-learns it from tonight onward. Writes now-seconds to BOTH noop.hrvBaselineEpoch
         // and noop.recoveryBaselineEpoch (so HRV plus resting HR / respiration / skin temp re-anchor);
         // foldHistory drops every night before that epoch and re-seeds. Mirrors the iOS/Mac button.
+        // Whoof: the sleep-detection knobs (SleepTuning) with a recompute.
+        SettingsCard(
+            icon = Icons.Filled.Bedtime,
+            title = "Sleep detection",
+            blurb = "How the night is found in your heart-rate and motion. Lower the onset threshold or the persistence if Whoof starts your night too late; raise the wake bridge if a bathroom break splits it.",
+        ) {
+            var onsetMult by remember { mutableStateOf(com.noop.analytics.SleepTuning.onsetMult(context)) }
+            var onsetEpochs by remember { mutableStateOf(com.noop.analytics.SleepTuning.onsetEpochs(context)) }
+            var wakeBridge by remember { mutableStateOf(com.noop.analytics.SleepTuning.wakeBridgeMin(context)) }
+            var sparseBridge by remember { mutableStateOf(com.noop.analytics.SleepTuning.sparseBridgeMin(context)) }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Onset HR threshold (× night baseline)", style = NoopType.footnote, color = Palette.textSecondary)
+                    Text(String.format(java.util.Locale.US, "%.2f", onsetMult), style = NoopType.footnote, color = Palette.accent)
+                }
+                Slider(value = onsetMult.toFloat(), onValueChange = { onsetMult = (it * 100).roundToInt() / 100.0 },
+                    onValueChangeFinished = { com.noop.analytics.SleepTuning.set(context, onsetMult = onsetMult) },
+                    valueRange = 1.0f..1.25f, steps = 24,
+                    colors = SliderDefaults.colors(thumbColor = Palette.accent, activeTrackColor = Palette.accent, inactiveTrackColor = Palette.surfaceInset))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Onset persistence (epochs)", style = NoopType.footnote, color = Palette.textSecondary)
+                    Text("$onsetEpochs", style = NoopType.footnote, color = Palette.accent)
+                }
+                Slider(value = onsetEpochs.toFloat(), onValueChange = { onsetEpochs = it.roundToInt() },
+                    onValueChangeFinished = { com.noop.analytics.SleepTuning.set(context, onsetEpochs = onsetEpochs) },
+                    valueRange = 1f..6f, steps = 4,
+                    colors = SliderDefaults.colors(thumbColor = Palette.accent, activeTrackColor = Palette.accent, inactiveTrackColor = Palette.surfaceInset))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Wake bridge (min) — brief wakes kept inside the night", style = NoopType.footnote, color = Palette.textSecondary)
+                    Text("$wakeBridge", style = NoopType.footnote, color = Palette.accent)
+                }
+                Slider(value = wakeBridge.toFloat(), onValueChange = { wakeBridge = (it / 5).roundToInt() * 5 },
+                    onValueChangeFinished = { com.noop.analytics.SleepTuning.set(context, wakeBridgeMin = wakeBridge) },
+                    valueRange = 15f..120f, steps = 20,
+                    colors = SliderDefaults.colors(thumbColor = Palette.accent, activeTrackColor = Palette.accent, inactiveTrackColor = Palette.surfaceInset))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("HR-only bridge (min) — nights without motion data", style = NoopType.footnote, color = Palette.textSecondary)
+                    Text("$sparseBridge", style = NoopType.footnote, color = Palette.accent)
+                }
+                Slider(value = sparseBridge.toFloat(), onValueChange = { sparseBridge = (it / 5).roundToInt() * 5 },
+                    onValueChangeFinished = { com.noop.analytics.SleepTuning.set(context, sparseBridgeMin = sparseBridge) },
+                    valueRange = 15f..180f, steps = 32,
+                    colors = SliderDefaults.colors(thumbColor = Palette.accent, activeTrackColor = Palette.accent, inactiveTrackColor = Palette.surfaceInset))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(
+                        onClick = { vm.recomputeNightsNow(); Toast.makeText(context, "Recomputing recent nights…", Toast.LENGTH_SHORT).show() },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Palette.accent),
+                    ) { Text("Recompute nights", style = NoopType.captionNumber) }
+                    OutlinedButton(
+                        onClick = {
+                            com.noop.analytics.SleepTuning.reset(context)
+                            onsetMult = com.noop.analytics.SleepTuning.DEFAULT_ONSET_MULT
+                            onsetEpochs = com.noop.analytics.SleepTuning.DEFAULT_ONSET_EPOCHS
+                            wakeBridge = com.noop.analytics.SleepTuning.DEFAULT_WAKE_BRIDGE_MIN
+                            sparseBridge = com.noop.analytics.SleepTuning.DEFAULT_SPARSE_BRIDGE_MIN
+                            vm.recomputeNightsNow()
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Palette.textSecondary),
+                    ) { Text("Defaults", style = NoopType.captionNumber) }
+                }
+            }
+        }
+
         SettingsCard(
             icon = Icons.Filled.Favorite,
             title = uiString(R.string.l10n_settings_screen_charge_d4e1aee4),

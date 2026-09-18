@@ -913,7 +913,40 @@ fun SleepScreen(
                                 val cavCoverage = HypnogramCoverage.groupFraction(
                                     cavGroup.map { HypnogramCoverage.Fragment(it.stagesJSON, (it.endTs - it.startTs).toDouble()) }
                                 )
+                                // Whoof: HR coverage of the night, so a short night can be told apart from a
+                                // late-detected one: data before onset means the stager waited, not the strap.
+                                var coverageNote by remember(cavSession?.startTs, cavSession?.endTs) { mutableStateOf<String?>(null) }
+                                LaunchedEffect(cavSession?.startTs, cavSession?.endTs, vm.activeStrapId) {
+                                    val ses = cavSession ?: return@LaunchedEffect
+                                    val onset = ses.effectiveStartTs; val wake = ses.endTs
+                                    if (wake <= onset) return@LaunchedEffect
+                                    coverageNote = runCatching {
+                                        val buckets = vm.repo.hrBucketsUnion(vm.activeStrapId, onset - 3 * 3600L, wake + 3600L, bucketSeconds = 60L)
+                                        val inNight = buckets.filter { it.bucket in onset until wake }
+                                        val expected = ((wake - onset) / 60L).toInt().coerceAtLeast(1)
+                                        val pct = (inNight.size * 100 / expected).coerceIn(0, 100)
+                                        var largestGap = 0L; var prev = onset
+                                        for (b in inNight.sortedBy { it.bucket }) { largestGap = maxOf(largestGap, b.bucket - prev); prev = b.bucket }
+                                        largestGap = maxOf(largestGap, wake - prev)
+                                        val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                                        val z = java.time.ZoneId.systemDefault()
+                                        val firstBefore = buckets.filter { it.bucket < onset }.minByOrNull { it.bucket }
+                                        buildString {
+                                            append("Heart-rate coverage $pct% of the night")
+                                            if (largestGap >= 15 * 60) append(", largest gap ${largestGap / 60} min")
+                                            append(".")
+                                            if (firstBefore != null) {
+                                                append(" Heart rate was recorded from ")
+                                                append(java.time.Instant.ofEpochSecond(firstBefore.bucket).atZone(z).format(fmt))
+                                                append(" but sleep onset was detected at ")
+                                                append(java.time.Instant.ofEpochSecond(onset).atZone(z).format(fmt))
+                                                append(": the detector waited for stillness and a lower heart rate (tune it in Settings → Sleep detection).")
+                                            }
+                                        }
+                                    }.getOrNull()
+                                }
                                 val caveats = buildList {
+                                    coverageNote?.let { add(it) }
                                     if (cavSession?.stagingSparse == true) add(
                                         uiString(R.string.l10n_sleep_screen_may_be_incomplete_7230dc27) + " — " +
                                             uiString(R.string.l10n_sleep_screen_little_motion_was_recorded_over_f061b7e4)
