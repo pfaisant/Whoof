@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
@@ -95,7 +97,7 @@ fun CoachScreen(vm: CoachViewModel = viewModel(), onOpenSettings: () -> Unit = {
     val skyBehindCards = remember { NoopPrefs.skyBehindCards(context) }
 
     ScreenScaffold(
-        title = uiString(R.string.l10n_coach_screen_coach_b32c9ad3),
+        title = null,   // Whoof: the bottom bar already says Coach
         // LIQUID SKY BACKDROP (the pilot pattern — LiquidScreenSky.kt): the liquid sky sits behind the
         // header and the cards float over the flat canvas below. Reuses the shared LiquidScreenSky() slot
         // verbatim; when the day-cycle background is off, the scaffold paints the plain surface instead.
@@ -265,110 +267,69 @@ private fun CoachSetup(vm: CoachViewModel) {
 
 @Composable
 private fun CoachChat(vm: CoachViewModel, onOpenSettings: () -> Unit) {
+    // Whoof redesign: model chip + clear on one quiet row, a greeting with tappable question cards while
+    // the thread is empty, bubbles once it is not, follow-ups as chips, then the composer. No disconnect,
+    // no privacy note, no token counter.
     val context = LocalContext.current
     val messages by vm.messages.collectAsStateWithLifecycle()
     val sending by vm.sending.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
-    // Only ever read inside the error branch below — see CoachViewModel.keyRejected.
     val keyRejected by vm.keyRejected.collectAsStateWithLifecycle()
     val provider by vm.provider.collectAsStateWithLifecycle()
     val model by vm.model.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
-    // K15: the composer draft is persisted to SharedPreferences so it survives an app relaunch.
-    // Restored on first composition, saved on every change. Keyed identically to the iOS twin.
     val draftPrefs = remember { context.getSharedPreferences("noop_coach_draft", android.content.Context.MODE_PRIVATE) }
     var input by remember { mutableStateOf(draftPrefs.getString("draft", "") ?: "") }
-    // K2: confirmation gate for the destructive "Clear conversation" action.
     var showClearConfirm by remember { mutableStateOf(false) }
-    // The corrected key, typed into the editor the rejection message opens. Separate from `input` so a
-    // half-typed question is not lost while fixing the key, and cleared on save so a secret does not
-    // sit in composition state after it has been stored.
     var keyFix by remember { mutableStateOf("") }
 
-    // Refresh the contextual chips whenever the chat empties (so a fresh sync updates them) and
-    // once on first show. Best-effort; the VM falls back to the generic set on any failure.
-    LaunchedEffect(messages.isEmpty()) {
-        if (messages.isEmpty()) vm.refreshSuggestions()
-    }
-
-    // K14: vibrate when a reply arrives (sending goes true → false with messages present).
-    var wasSending by remember { mutableStateOf(false) }
-    LaunchedEffect(sending) {
-        if (wasSending && !sending && messages.isNotEmpty()) {
-            val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE)
-                as android.os.Vibrator
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                vibrator.vibrate(
-                    android.os.VibrationEffect.createOneShot(50, android.os.VibrationEffect.DEFAULT_AMPLITUDE)
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(50)
-            }
-        }
-        wasSending = sending
-    }
-
-    // K2 + K5 ordering matters and both gate on an EMPTY transcript, so this is ONE coroutine,
-    // sequential: restore whatever the prior launch persisted FIRST, THEN surface a brief the
-    // scheduled notification already generated (if any) — so K5 never overwrites K2's restore, and
-    // never appends a duplicate brief onto a transcript K2 just repopulated.
+    LaunchedEffect(messages.isEmpty()) { if (messages.isEmpty()) vm.refreshSuggestions() }
     LaunchedEffect(Unit) {
         vm.loadPersistedMessagesIfNeeded()
-        // loadBriefSettings is NOT called here any more: it only populates the brief's UI state, which
-        // CoachSettingsScreen owns since #2243, and consumeScheduledBriefIfAny reads storage directly.
         vm.consumeScheduledBriefIfAny(context)
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val send: (String) -> Unit = { text ->
+        vm.send(context, text)
+        input = ""
+        draftPrefs.edit().remove("draft").apply()
+    }
 
-        // Active-provider strip. The consent toggle, the coach instructions and the morning brief
-        // moved to CoachSettingsScreen (#2243) so this tab is the conversation; what stays is the one
-        // line saying which model is answering, and the way through to the rest.
-        //
-        // Disconnect stays HERE rather than moving with them. It is the only route back to the setup
-        // card, which is the only place a key can be typed (#2206 has the iOS version of this, where
-        // the same control had been placed in a toolbar the tab never renders). Keeping connection
-        // management on the conversation screen on both platforms also keeps that one split identical,
-        // which is the part worth keeping identical. The two settings screens do NOT hold the same
-        // cards: see CoachSettingsScreen's own note on the two Gemini/signals opt-ins.
-        NoopCard(padding = 14.dp, tint = Palette.chargeColor) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // The pill takes the flexible space (ellipsizing a long model id); the two affordances
-                // keep their intrinsic single-line width so they can never be squeezed into a vertical
-                // stack (#1074).
-                StatePill(
-                    title = uiString(R.string.l10n_coach_screen_provider_displayname_model_8b39f761, provider.displayName, model),
-                    tone = StrandTone.Accent, showsDot = true,
-                    modifier = Modifier.weight(1f),
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // Header row: model chip (→ settings) · clear.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val chipInteraction = remember { MutableInteractionSource() }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Palette.surfaceRaised)
+                    .liquidPress(chipInteraction)
+                    .clickable(interactionSource = chipInteraction, indication = null) { onOpenSettings() }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            ) {
+                Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(Palette.accent))
+                Text(
+                    model.substringAfterLast('/').ifBlank { provider.displayName },
+                    style = NoopType.number(12f, weight = FontWeight.Bold),
+                    color = Palette.textPrimary, maxLines = 1, softWrap = false,
                 )
-                Spacer(Modifier.width(8.dp))
-                val settingsInteraction = remember { MutableInteractionSource() }
+                Icon(Icons.Filled.Tune, contentDescription = uiString(R.string.coach_settings), tint = Palette.textTertiary, modifier = Modifier.size(14.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            if (messages.isNotEmpty()) {
+                val clearInteraction = remember { MutableInteractionSource() }
                 Icon(
-                    Icons.Filled.Tune,
-                    contentDescription = uiString(R.string.coach_settings),
+                    Icons.Filled.DeleteSweep,
+                    contentDescription = stringResource(R.string.coach_clear_action),
                     tint = Palette.textSecondary,
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .liquidPress(settingsInteraction)
-                        .clickable(interactionSource = settingsInteraction, indication = null) { onOpenSettings() }
+                        .liquidPress(clearInteraction)
+                        .clickable(interactionSource = clearInteraction, indication = null) { showClearConfirm = true }
                         .padding(6.dp)
                         .size(20.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                val disconnectInteraction = remember { MutableInteractionSource() }
-                Text(
-                    uiString(R.string.l10n_coach_screen_disconnect_ed28e068),
-                    style = NoopType.caption,
-                    color = Palette.textSecondary,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .liquidPress(disconnectInteraction)
-                        .clickable(interactionSource = disconnectInteraction, indication = null) { vm.disconnect(context) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .semantics { contentDescription = uiString(R.string.l10n_coach_screen_disconnect_provider_fa13625c) },
                 )
             }
         }
@@ -389,125 +350,83 @@ private fun CoachChat(vm: CoachViewModel, onOpenSettings: () -> Unit) {
             )
         }
 
-        // Transcript or empty-state with suggested prompts.
         if (messages.isEmpty()) {
-            NoopCard(padding = 18.dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        uiString(R.string.l10n_coach_screen_ask_anything_about_your_recent_recovery_e6c287ca),
-                        style = NoopType.subhead, color = Palette.textSecondary,
-                    )
-                    SuggestedPrompts(prompts = suggestions, onPick = { input = it })
+            // Empty thread: a greeting and the suggestions as tappable cards, two per row. A tap SENDS.
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(coachGreeting(), style = NoopType.title2, color = Palette.textPrimary)
+                Text("Grounded in your own numbers.", style = NoopType.subhead, color = Palette.textTertiary)
+            }
+            val rows = suggestions.take(6).chunked(2)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                rows.forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        pair.forEach { q ->
+                            val inter = remember(q) { MutableInteractionSource() }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .frostedCardSurface(tint = Palette.accent, cornerRadius = 16.dp)
+                                    .liquidPress(inter)
+                                    .clickable(interactionSource = inter, indication = null, enabled = !sending) { send(q) }
+                                    .padding(14.dp),
+                            ) {
+                                Text(q, style = NoopType.subhead, color = Palette.textPrimary)
+                            }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 messages.forEach { msg -> ChatBubble(msg, vm) }
                 if (sending) ThinkingBubble()
-                // K7: follow-up suggestion chips after each assistant reply (when not mid-send).
-                if (!sending && messages.isNotEmpty() && messages.last().role == "assistant") {
-                    SuggestedPrompts(prompts = vm.followUpSuggestions, onPick = { input = it })
+                if (!sending && messages.last().role == "assistant") {
+                    SuggestedPrompts(prompts = vm.followUpSuggestions, onPick = { send(it) })
                 }
             }
         }
 
-        // Error line (red). Capture into a stable local first: `error` is a state-backed nullable, and
-        // the `semantics {}` contentDescription is a DEFERRED closure run later during the accessibility
-        // pass — by then a recomposition can have cleared `error`, so `error!!` inside the lambda would
-        // NPE (#1074). The local `errorMsg` is a fixed non-null snapshot the lambda can't null out from
-        // under it.
         val errorMsg = error
         if (errorMsg != null) {
-            Text(
-                errorMsg,
-                style = NoopType.subhead,
-                color = Palette.statusCritical,
-                modifier = Modifier.semantics { contentDescription = uiString(R.string.l10n_coach_screen_coach_error_error_ad9c8c46, errorMsg) },
-            )
-            // A rejected key is the one failure the wearer can act on from here, and the message
-            // already tells them to: "Check the key and try again". Until this, the screen offered
-            // nowhere to check it. The field is rendered INSIDE the error branch, never on its own
-            // flag, so it cannot outlive the message that justifies it.
+            Text(errorMsg, style = NoopType.footnote, color = Palette.statusCritical)
             if (keyRejected) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        uiString(R.string.coach_key_rejected_hint),
-                        style = NoopType.footnote,
-                        color = Palette.textSecondary,
-                    )
-                    CoachKeyField(
-                        value = keyFix,
-                        onValueChange = { keyFix = it },
-                        placeholder = uiString(R.string.coach_key_rejected_placeholder, provider.displayName),
-                    )
-                    CoachPrimaryButton(
-                        label = uiString(R.string.coach_key_rejected_action),
-                        enabled = keyFix.isNotBlank(),
-                        onClick = {
-                            vm.saveKey(context, keyFix)
-                            keyFix = ""
-                        },
-                    )
-                }
+                CoachKeyField(
+                    value = keyFix,
+                    onValueChange = { keyFix = it },
+                    placeholder = uiString(R.string.coach_key_rejected_placeholder, provider.displayName),
+                )
+                CoachPrimaryButton(
+                    label = uiString(R.string.coach_key_rejected_action),
+                    enabled = keyFix.isNotBlank(),
+                    onClick = { vm.saveKey(context, keyFix); keyFix = "" },
+                )
             }
         }
 
-        // Input row + Send, a frosted overlay surface so the composer reads as a docked input bar.
-        // K4: the mic button (on-device voice input) sits between the text field and Send.
         MicComposerRow(
             input = input,
             onInputChange = {
                 input = it
-                // K15: persist the draft so it survives an app relaunch.
                 draftPrefs.edit().putString("draft", it).apply()
                 if (error != null) vm.clearError()
             },
             sending = sending,
-            onSend = {
-                vm.send(context, input)
-                input = ""
-                // K15: clear the persisted draft on send.
-                draftPrefs.edit().remove("draft").apply()
-            },
+            onSend = { send(input) },
         )
-
-        // K12: rough token estimate shown when the draft is non-empty.
-        if (input.isNotBlank()) {
-            vm.estimatedTokens(input)?.let { tokens ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                    horizontalArrangement = Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Speed,
-                        contentDescription = null,
-                        modifier = Modifier.size(10.dp),
-                        tint = Palette.textTertiary,
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        stringResource(R.string.coach_token_estimate, tokens),
-                        style = NoopType.caption,
-                        color = Palette.textTertiary,
-                    )
-                    if (tokens > 8000) {
-                        Text(
-                            stringResource(R.string.coach_token_warning),
-                            style = NoopType.caption,
-                            color = Palette.textTertiary,
-                        )
-                    }
-                }
-            }
-        }
-
-        // Privacy note repeated under the input so it's always on screen.
-        PrivacyNote(local = provider == AiProvider.CUSTOM)
     }
 }
 
-// MARK: - Chat bubbles
+private fun coachGreeting(): String {
+    val h = java.time.LocalTime.now().hour
+    return when {
+        h < 5 -> "Still up?"
+        h < 12 -> "Good morning."
+        h < 18 -> "Good afternoon."
+        else -> "Good evening."
+    }
+}
 
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -552,10 +471,6 @@ private fun ChatBubble(msg: ChatMsg, vm: CoachViewModel) {
                 ),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Overline(
-                    if (isUser) "You" else "Coach",
-                    color = if (isUser) Palette.accentHover else Palette.textTertiary,
-                )
                 if (isUser) {
                     Text(msg.text, style = NoopType.body, color = Palette.textPrimary)
                 } else {
@@ -585,13 +500,6 @@ private fun ChatBubble(msg: ChatMsg, vm: CoachViewModel) {
                         context.startActivity(
                             android.content.Intent.createChooser(sendIntent, "Share Coach advice")
                         )
-                        showMenu = false
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.coach_save_to_journal)) },
-                    onClick = {
-                        vm.saveAdviceToJournal(msg.text)
                         showMenu = false
                     },
                 )

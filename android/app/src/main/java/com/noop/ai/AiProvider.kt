@@ -28,9 +28,9 @@ enum class AiProvider(
      */
     OPENROUTER(
         displayName = "OpenRouter",
-        defaultModel = "deepseek/deepseek-chat-v3.1",
+        defaultModel = "deepseek/deepseek-v4.1-flash",
         models = listOf(
-            "deepseek/deepseek-chat-v3.1",
+            "deepseek/deepseek-v4.1-flash",
             "google/gemini-2.5-flash",
             "google/gemini-2.5-pro",
             "anthropic/claude-sonnet-4.5",

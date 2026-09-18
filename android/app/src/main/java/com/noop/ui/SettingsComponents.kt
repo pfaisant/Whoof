@@ -101,6 +101,43 @@ internal fun SettingsDisclosureGroup(
  * A grouped settings card: a "Settings" overline + icon + title header, an explanatory blurb, then
  * content. A faint brand-green wash anchors the card to NOOP's neutral chrome (mirrors macOS).
  */
+/** Whoof: Settings tabs, most important first. Cards are assigned by title in [settingsTabFor]. */
+internal enum class SettingsTab(val label: String) { MAIN("Main"), LOOK("Look"), DATA("Data"), ADVANCED("Advanced") }
+
+/** Whoof: screen-level search + tab state read by every [SettingsCard] and row. Reset on screen entry. */
+internal object SettingsFilter {
+    val query = androidx.compose.runtime.mutableStateOf("")
+    val tab = androidx.compose.runtime.mutableStateOf(SettingsTab.MAIN)
+    /** title → decided visibility for the current query (null = not decided yet, compose to find out). */
+    val decided = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+    fun reset() { query.value = ""; tab.value = SettingsTab.MAIN; decided.clear() }
+}
+
+internal fun settingsTabFor(title: String): SettingsTab {
+    val t = title.lowercase()
+    return when {
+        listOf("appearance", "bottom bar", "background", "app icon", "photo").any { it in t } -> SettingsTab.LOOK
+        listOf("backup", "push", "export").any { it in t } -> SettingsTab.DATA
+        listOf("experimental", "diagnostic", "test centre", "about").any { it in t } -> SettingsTab.ADVANCED
+        else -> SettingsTab.MAIN
+    }
+}
+
+/** Per-card match holder rows write into while a search is active. */
+internal class SettingsCardMatch(val titleMatched: Boolean) { var rowMatched = false }
+internal val LocalSettingsCardMatch = androidx.compose.runtime.compositionLocalOf<SettingsCardMatch?> { null }
+
+/** Whoof: rows call this; returns false when the row should not render under the active search. */
+@Composable
+internal fun settingsRowVisible(vararg texts: String): Boolean {
+    val q = SettingsFilter.query.value.trim()
+    if (q.isBlank()) return true
+    val holder = LocalSettingsCardMatch.current ?: return true
+    val hit = texts.any { it.contains(q, ignoreCase = true) }
+    if (hit) holder.rowMatched = true
+    return hit || holder.titleMatched
+}
+
 @Composable
 internal fun SettingsCard(
     icon: ImageVector,
@@ -108,10 +145,19 @@ internal fun SettingsCard(
     blurb: String,
     content: @Composable () -> Unit,
 ) {
+    val q = SettingsFilter.query.value.trim()
+    val tab = SettingsFilter.tab.value
+    if (q.isBlank()) {
+        if (settingsTabFor(title) != tab) return
+    } else {
+        val decided = SettingsFilter.decided[title]
+        if (decided == false) return
+    }
+    val holder = androidx.compose.runtime.remember(q) { SettingsCardMatch(title.contains(q, ignoreCase = true) || blurb.contains(q, ignoreCase = true)) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalSettingsCardMatch provides holder) {
     NoopCard(padding = 20.dp, tint = Palette.accent) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Overline("Settings")
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -120,8 +166,15 @@ internal fun SettingsCard(
                     Text(title, style = NoopType.title2, color = Palette.textPrimary)
                 }
             }
-            Text(blurb, style = NoopType.subhead, color = Palette.textSecondary)
+            if (q.isBlank()) Text(blurb, style = NoopType.subhead, color = Palette.textSecondary)
             content()
+        }
+    }
+    }
+    // Decide after the rows composed: a card with neither a title nor a row hit disappears next frame.
+    androidx.compose.runtime.SideEffect {
+        if (q.isNotBlank() && SettingsFilter.decided[title] == null) {
+            SettingsFilter.decided[title] = holder.titleMatched || holder.rowMatched
         }
     }
 }
@@ -140,6 +193,7 @@ internal fun SettingsToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    if (!settingsRowVisible(title, detail)) return
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -178,6 +232,7 @@ internal fun SettingsToggleRow(
  */
 @Composable
 internal fun SettingsFormRow(label: String, control: @Composable () -> Unit) {
+    if (!settingsRowVisible(label)) return
     Row(
         modifier = Modifier
             .fillMaxWidth()

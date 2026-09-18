@@ -154,6 +154,15 @@ fun TrendsScreen(vm: AppViewModel) {
                 .values.associate { it.first to it.second }
         }.getOrDefault(emptyMap())
     }
+    // Whoof: VO₂ max estimate per day (computed series "vo2max_est"), plotted with the daily signals.
+    var vo2ByDay by remember { mutableStateOf<Map<String, Double>>(emptyMap()) }
+    LaunchedEffect(days) {
+        vo2ByDay = runCatching {
+            vm.repo.resolvedSeries("vo2max_est", "my-whoop", "0000-00-00", "9999-99-99", strapDeviceId = vm.activeStrapId)
+                .values.associate { it.first to it.second }
+        }.getOrDefault(emptyMap())
+    }
+    val vo2 = remember(days, range, vo2ByDay) { resolveMetric(days, range) { d -> vo2ByDay[d.day] } }
     val rest = remember(days, range, sleepPerfByDay) {
         resolveMetric(days, range) { d -> sleepPerfByDay[d.day] }
     }
@@ -332,6 +341,15 @@ fun TrendsScreen(vm: AppViewModel) {
                     resolved = strain,
                     fmt = { UnitFormatter.effortDisplay(it, effortScale) },
                 )
+                if (vo2.values.isNotEmpty()) {
+                    MetricTrendCard(
+                        title = "VO₂ max", unit = "ml/kg/min",
+                        color = Palette.metricCyan,
+                        higherIsBetter = true,
+                        resolved = vo2,
+                        fmt = { String.format(java.util.Locale.US, "%.1f", it) },
+                    )
+                }
             }
         }
 
@@ -349,14 +367,6 @@ fun TrendsScreen(vm: AppViewModel) {
             }
         }
 
-        // --- Export trends report (#436) , the shareable offline PDF exporter. Mirrors the iOS
-        // TrendsView.exportReportRow footer; the same composable Settings hosts, so both surfaces
-        // offer it. Routed through NoopButton like every other CTA (no gold). ---
-        item {
-            Column(modifier = Modifier.staggeredAppear(index = 7)) {
-                TrendsReportExportSection(vm)
-            }
-        }
     }
 }
 
@@ -424,16 +434,6 @@ private fun WeeklyDigestNav(
             Box(modifier = Modifier.onGloballyPositioned { cardBounds = it.boundsInRoot() }) {
                 NoopCard { WeeklyDigestContent(digest = digest, compact = true) }
             }
-            NoopButton(
-                text = "Share recap",
-                leadingIcon = Icons.Filled.IosShare,
-                kind = NoopButtonKind.Secondary,
-                onClick = {
-                    val bounds = cardBounds
-                    val bmp = bounds?.let { RecapShare.captureCropped(hostView, it) }
-                    if (bmp != null) scope.launch { RecapShare.share(context, bmp, anchorDay) }
-                },
-            )
         }
     }
 }

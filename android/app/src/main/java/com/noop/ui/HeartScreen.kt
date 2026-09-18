@@ -1,6 +1,17 @@
 package com.noop.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -78,7 +89,7 @@ fun HeartScreen(viewModel: AppViewModel) {
     val effortForDay = StrainScorer.effectiveEffort(live = liveTodayStrain, stored = displayMetric?.strain)
 
     LazyScreenScaffold(
-        title = uiString(R.string.nav_heart),
+        title = null,   // Whoof: the bottom bar already says Heart
         topBackground = screenBackdropSlot(showDayCycleBackground, skyBehindCards),
         fullBleedBackground = screenBackdropFullBleed(showDayCycleBackground, skyBehindCards),
     ) {
@@ -98,10 +109,12 @@ fun HeartScreen(viewModel: AppViewModel) {
     }
 }
 
-/** Big live number with a zone word, then the three daily numbers in one row. */
+private val LIQUID_HERO_RADIUS = 26.dp
+
+/** Whoof: the live number floats on a liquid vessel filled to bpm / max HR, then the daily numbers. */
 @Composable
 private fun LiveBpmHero(bpm: Int?, rhr: Int?, hrv: Double?, maxHr: Double?, connected: Boolean) {
-    val fraction = if (bpm != null && maxHr != null && maxHr > 0) bpm / maxHr else null
+    val fraction = if (bpm != null && maxHr != null && maxHr > 0) (bpm / maxHr).coerceIn(0.0, 1.0) else null
     val zoneWord = when {
         bpm == null -> if (connected) "Waiting for the strap" else "Strap not connected"
         fraction == null -> "Live"
@@ -113,37 +126,63 @@ private fun LiveBpmHero(bpm: Int?, rhr: Int?, hrv: Double?, maxHr: Double?, conn
         else -> "Max"
     }
     val tint = when {
-        fraction == null -> Palette.metricRose
-        fraction < 0.60 -> Palette.metricCyan
+        fraction == null -> Palette.accent
+        fraction < 0.60 -> Palette.accent
         fraction < 0.80 -> Palette.effortColor
         else -> Palette.statusCritical
     }
-    NoopCard(padding = Metrics.space16, tint = tint) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    bpm?.toString() ?: "—",
-                    style = NoopType.number(64f, weight = FontWeight.Bold),
-                    color = if (bpm != null) tint else Palette.textTertiary,
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(LIQUID_HERO_RADIUS))
+            .background(Palette.heroFill.copy(alpha = Palette.heroFill.alpha * CardAppearance.opacity))
+            .border(1.dp, Palette.heroBorder.copy(alpha = Palette.heroBorder.alpha * CardAppearance.opacity), RoundedCornerShape(LIQUID_HERO_RADIUS)),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(Metrics.space16),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Metrics.space12),
+        ) {
+            Box(modifier = Modifier.size(168.dp), contentAlignment = Alignment.Center) {
+                LiquidVessel(
+                    value = fraction ?: 0.0,
+                    tint = tint,
+                    animated = bpm != null,
+                    modifier = Modifier.fillMaxSize(),
                 )
-                Text("bpm", style = NoopType.subhead, color = Palette.textTertiary, modifier = Modifier.padding(bottom = 12.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (bpm != null) {
+                        CountUpText(
+                            value = bpm.toDouble(),
+                            format = { it.roundToInt().toString() },
+                            style = NoopType.number(56f, weight = FontWeight.Bold)
+                                .copy(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), offset = Offset(0f, 1f), blurRadius = 6f)),
+                            color = Color.White,
+                            modifier = Modifier.clearAndSetSemantics {},
+                        )
+                    } else {
+                        Text("—", style = NoopType.number(56f, weight = FontWeight.Bold), color = Palette.textSecondary)
+                    }
+                    Text("bpm", style = NoopType.caption, color = Color.White.copy(alpha = 0.75f))
+                }
             }
-            Text(zoneWord, style = NoopType.subhead, color = Palette.textSecondary)
-            Spacer(Modifier.height(Metrics.space12))
+            Text(zoneWord, style = NoopType.subhead, color = if (bpm != null) tint else Palette.textTertiary)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.gap)) {
-                StatTile(
-                    modifier = Modifier.weight(1f), label = "Resting",
-                    value = rhr?.toString() ?: "—", caption = "bpm", accent = Palette.metricRose,
-                )
-                StatTile(
-                    modifier = Modifier.weight(1f), label = "HRV",
-                    value = hrv?.roundToInt()?.toString() ?: "—", caption = "ms", accent = Palette.metricCyan,
-                )
-                StatTile(
-                    modifier = Modifier.weight(1f), label = "Max",
-                    value = maxHr?.roundToInt()?.toString() ?: "—", caption = "bpm", accent = Palette.effortColor,
-                )
+                HeroStat(Modifier.weight(1f), "Resting", rhr?.toString() ?: "—", "bpm", Palette.metricRose)
+                HeroStat(Modifier.weight(1f), "HRV", hrv?.roundToInt()?.toString() ?: "—", "ms", Palette.metricCyan)
+                HeroStat(Modifier.weight(1f), "Max", maxHr?.roundToInt()?.toString() ?: "—", "bpm", Palette.effortColor)
             }
+        }
+    }
+}
+
+@Composable
+private fun HeroStat(modifier: Modifier, label: String, value: String, unit: String, accent: Color) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label.uppercase(), style = NoopType.caption, color = Palette.textTertiary)
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(value, style = NoopType.number(22f, weight = FontWeight.Bold), color = accent)
+            Text(unit, style = NoopType.caption, color = Palette.textTertiary, modifier = Modifier.padding(bottom = 3.dp))
         }
     }
 }

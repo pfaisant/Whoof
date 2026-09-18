@@ -231,7 +231,7 @@ object UnitPrefs {
 
     /** The Sleep stage-chart style (default CLASSIC per-stage rows). Display-only. */
     fun sleepChartStyle(context: Context): SleepChartStyle =
-        SleepChartStyle.fromRaw(NoopPrefs.of(context).getString(KEY_SLEEP_CHART_STYLE, null))
+        SleepChartStyle.fromRaw(NoopPrefs.of(context).getString(KEY_SLEEP_CHART_STYLE, null) ?: SleepChartStyle.FILLED.raw)   // Whoof: filled hypnogram by default
 
     /** Persist the Sleep stage-chart style. Display-only — no re-score. */
     fun setSleepChartStyle(context: Context, style: SleepChartStyle) {

@@ -33,6 +33,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
@@ -512,7 +514,20 @@ fun TodayScreen(
     // #today-layout: the user-ordered below-hero section list + its editor dialog flag. Read once (prefs
     // aren't reactive) and re-read on the editor's save, exactly like enabledKeyMetrics above.
     var showLayoutEditor by remember { mutableStateOf(false) }
-    var sectionOrder by remember { mutableStateOf(TodayLayoutPrefs.order(context).filterNot { it == TodaySection.JOURNAL }) }   // Whoof: journal removed
+    var sectionOrder by remember { mutableStateOf(TodayLayoutPrefs.order(context).filterNot { it == TodaySection.JOURNAL }) }
+    // Whoof: last night's main-sleep window for the Sleep tile caption ("4h45 · 02:23–07:10").
+    var lastNightWindow by remember { mutableStateOf<SleepSession?>(null) }
+    LaunchedEffect(days, selectedDayKey, live.lastSyncAt) {
+        lastNightWindow = runCatching {
+            val zone = ZoneId.systemDefault()
+            val dayStart = selectedDay.atStartOfDay(zone).toEpochSecond()
+            val dayEnd = selectedDay.plusDays(1).atStartOfDay(zone).toEpochSecond()
+            val blocks = viewModel.repo.sleepSessionsUnion(viewModel.activeStrapId, dayStart - 18 * 3600L, dayEnd)
+                .filter { it.startTs <= dayEnd && it.endTs >= dayStart - 6 * 3600L }
+            val habitual = viewModel.repo.habitualMidsleepSec(viewModel.activeStrapId)
+            mainSleepSpan(blocks, habitual)?.let { (a, b) -> SleepSession(deviceId = "my-whoop", startTs = a, endTs = b) }
+        }.getOrNull()
+    }   // Whoof: journal removed
     var hiddenSections by remember { mutableStateOf(TodayLayoutPrefs.hidden(context)) }
     // #today-layout (hold-to-drag): the hoisted list state (the drag math needs layoutInfo + scrollBy) and
     // the live drag state. The frame loop below runs ONLY while a section is lifted: each frame it retries
@@ -1407,6 +1422,8 @@ fun TodayScreen(
                 selectedDay = selectedDay,
                 batteryPct = if (liveSnap.connected) liveSnap.batteryPct else null,
                 strapIsActiveDevice = activeIsWhoop,
+                connected = liveSnap.connected,
+                onCustomize = { showLayoutEditor = true },
                 backfilling = liveSnap.backfilling,
                 syncChunksThisSession = liveSnap.syncChunksThisSession,
                 lastSyncAt = liveSnap.lastSyncAt,
@@ -1437,41 +1454,6 @@ fun TodayScreen(
             // control exactly, so the wordmark stays optically centred while owning the space BETWEEN them.
             // Overlap is now unexpressible at any label width, in any locale, because the two occupy
             // different slots rather than the same one.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // #2169: the balancing spacer becomes the control, but ONLY while there is something to
-                // connect. A permanently visible control has to explain itself; one that appears exactly
-                // when the strap is away says what it is for by being there, and cannot be read as a
-                // reload button on a screen that never reloads. Connected, it goes back to being a
-                // spacer, so the wordmark is centred by the same control-sized gutter either way and
-                // nothing moves as the strap comes and goes.
-                //
-                // Scanning counts as needed: a scan running means not yet connected, and hiding the
-                // control mid-attempt would take away the only in-progress signal the header has.
-                // The SLOT is permanent and only the control inside it fades, rather than swapping the
-                // two. A 4.0 that is dropping and auto-reconnecting flips `connected` repeatedly, and an
-                // instant swap turns that into a blinking icon beside the wordmark; a fade reads as a
-                // pulse instead. Keeping the gutter itself always present also means the wordmark cannot
-                // shift even mid-transition, which an if/else between a control and a spacer allows.
-                val scanAffordance by animateFloatAsState(
-                    targetValue = if (liveSnap.connected) 0f else 1f,
-                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-                )
-                Box(
-                    modifier = Modifier.height(HeaderClusterControl).widthIn(min = HeaderClusterControl),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (scanAffordance > 0.01f) {
-                        Box(modifier = Modifier.graphicsLayer { alpha = scanAffordance }) {
-                            RescanDisc(scanning = liveSnap.scanning, onClick = requestScan)
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.weight(1f))   // Whoof: no wordmark
-                CustomizeDisc(onClick = { showLayoutEditor = true })
-            }
             // The reply to a tap that went nowhere. Wording comes from the BLE layer, the same text
             // Live and Onboarding show, so this adds no copy of its own.
             scanHint?.let { hint ->
@@ -1794,16 +1776,6 @@ fun TodayScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Row(verticalAlignment = Alignment.Top) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    SectionHeader(uiString(R.string.today_section_key_metrics), overline = dayLabel, trailing = trendWindowLabel(keyMetricsWindowDays))
-                                }
-                                TodayEditAction(
-                                    onClick = { showMetricsEditor = true },
-                                    contentDescription = uiString(R.string.l10n_today_screen_edit_key_metrics_f95e61a4),
-                                    contentAlignment = Alignment.TopCenter,
-                                )
-                            }
                             Box(modifier = Modifier.fillMaxWidth().staggeredAppear(stagger)) {
                                 MetricGrid(
                                     d = stepResolvedDisplayMetric,
@@ -1831,6 +1803,7 @@ fun TodayScreen(
                                     stepsCalibrationPrompt = stepsCalibrationPrompt(context, profileStore),
                                     restScore = restScoreForDay,
                                     restSpark = restCompositeSpark,
+                                    sleepWindow = lastNightWindow,
                                     enabledMetrics = enabledKeyMetrics,
                                     isToday = selectedDayOffset == 0,
                                     // #1164: today's Rest is provisional while the strap has banked records
@@ -2356,6 +2329,42 @@ private fun TodayCardDismissButton(onClick: () -> Unit, modifier: Modifier = Mod
  * buttons follow. No spinner: the sync chip two controls away is already the thing that reports state.
  */
 @Composable
+private fun ConnectionStatusDisc(connected: Boolean, scanning: Boolean, onClick: (() -> Unit)?) {
+    val interaction = remember { MutableInteractionSource() }
+    val tone = when {
+        connected -> Palette.statusPositive
+        scanning -> Palette.statusWarning
+        else -> Palette.statusCritical
+    }
+    Box(
+        modifier = Modifier
+            .size(HeaderClusterControl)
+            .liquidPress(interaction)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.12f))
+            .clickable(interactionSource = interaction, indication = null, enabled = onClick != null && !scanning) { onClick?.invoke() }
+            .semantics { contentDescription = if (connected) "Strap connected" else "Strap not connected, tap to connect" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (connected) Icons.Filled.Link else Icons.Filled.LinkOff,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.9f),
+            modifier = Modifier.size(16.dp),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(5.dp)
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(tone)
+                .border(1.dp, Color.Black.copy(alpha = 0.5f), CircleShape),
+        )
+    }
+}
+
+@Composable
 private fun RescanDisc(scanning: Boolean, onClick: () -> Unit) {
     // Whoof: a labelled Connect pill instead of a bare glyph; accent while idle, dimmed while scanning.
     val interaction = remember { MutableInteractionSource() }
@@ -2559,6 +2568,8 @@ private fun LiquidTodayHeader(
      *  IS active means "connected, no reading yet" and is worth drawing; a strap that is not the active
      *  device has nothing to say and is not drawn at all. (#2208) */
     strapIsActiveDevice: Boolean,
+    connected: Boolean = false,
+    onCustomize: () -> Unit = {},
     // #245: sync state for the compact header chip (twin of iOS SyncStatusChip).
     backfilling: Boolean = false,
     syncChunksThisSession: Int = 0,
@@ -2663,12 +2674,9 @@ private fun LiquidTodayHeader(
             // #245: compact sync-status chip, shown for EVERY user — syncing / last-synced / experimental,
             // so the absence of active syncing reads as caught-up (the full SyncingHistoryNote is gated on
             // recovery == null). Twin of iOS SyncStatusChip.
-            SyncStatusChip(
-                backfilling = backfilling, chunks = syncChunksThisSession,
-                lastSyncAt = lastSyncAt, historySyncExperimental = historySyncExperimental,
-                pagesBehind = pagesBehindAtConnect,
-                scanning = scanning, onRescan = onRescan,
-            )
+            // Whoof: one modern link glyph, green when the strap streams, red when it does not; tap = connect.
+            ConnectionStatusDisc(connected = connected, scanning = scanning, onClick = onRescan)
+            CustomizeDisc(onClick = onCustomize)
             // (a) Profile avatar (the photo set in Settings, or the NOOP loop mark) → Settings. Mirrors iOS.
             Box(
                 modifier = Modifier
@@ -3135,9 +3143,9 @@ private fun ScoreHeroRow(
                             }
                         }
                     }
-                    if (heroSourceLabel != null) {
+                    if (false && heroSourceLabel != null) {   // Whoof: no source badge on the hero
                         SourceBadge(
-                            text = heroSourceLabel,
+                            text = heroSourceLabel!!,
                             // #1160: the hero is theme-aware now, so its badge uses the flip-able text token.
                             tint = Palette.textSecondary,
                             modifier = Modifier
@@ -3708,12 +3716,6 @@ private fun HeroMetricRows(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Overline(uiString(R.string.today_section_recovery_vitals), modifier = Modifier.weight(1f))
-                // iOS `lastNightLine` — today's own "Last night · <date>" unless the shown vitals are a carry.
-                Text(
-                    if (carriedFromVitals) carriedCaption(vitalsDay!!.day).localized() else heroVitalsLastNightLine(),
-                    style = NoopType.caption,
-                    color = Palette.textTertiary,
-                )
             }
             HeroVitalRow(
                 label = uiString(R.string.l10n_today_screen_heart_rate_variability_a137586d),
@@ -5886,6 +5888,7 @@ internal fun resolveSkinTempReading(
 private fun MetricGrid(
     d: DailyMetric?,
     w: Window,
+    sleepWindow: SleepSession? = null,
     recoveryCalibration: Int? = null,
     lastScoredCharge: LastCharge? = null,
     carriedDay: DailyMetric? = null,
@@ -6019,7 +6022,14 @@ private fun MetricGrid(
                 uiString(R.string.l10n_today_screen_pending_sync_cbe01f9e) + " · " +
                     uiString(R.string.l10n_today_screen_strap_history_still_offloading_80140264)
             } else {
-                null
+                // Whoof: how long, and when: "4h45 · 02:23–07:10".
+                sleepWindow?.let { sw ->
+                    val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                    val z = ZoneId.systemDefault()
+                    val a = java.time.Instant.ofEpochSecond(sw.startTs).atZone(z).format(fmt)
+                    val b = java.time.Instant.ofEpochSecond(sw.endTs).atZone(z).format(fmt)
+                    durationText((sw.endTs - sw.startTs) / 60.0) + " · $a–$b"
+                }
             },
         ),
         KeyMetric.HRV to run {
@@ -6171,7 +6181,7 @@ private fun MetricGrid(
     // S5: slice from the FRONT of the saved order so a pinned/selected tile is never dropped or reordered
     // (#251); only the tail folds behind the expander. Mirrors the iOS visibleKeyMetrics prefix(cap).
     val hasOverflow = allTiles.size > METRICS_COLLAPSED_CAP
-    val tiles = if (metricsExpanded || !hasOverflow) allTiles else allTiles.take(METRICS_COLLAPSED_CAP)
+    val tiles = allTiles   // Whoof: every enabled tile, no expander
 
     // iOS `keyMetricsSection` LazyVGrid: 3 columns, spacing 8. Build from rows so tile heights tile uniformly
     // and a partial last row pads with empty weight so the columns stay aligned.
@@ -6199,7 +6209,7 @@ private fun MetricGrid(
         }
         // S5: the "Show all metrics" / "Show fewer" expander — a centered link like iOS. Toggles visibility
         // only, never WHICH tiles are enabled or their order (that stays the #251 editor's job).
-        if (hasOverflow) {
+        if (false && hasOverflow) {   // Whoof: expander retired
             val hidden = allTiles.size - METRICS_COLLAPSED_CAP
             TextButton(
                 onClick = onToggleMetrics,

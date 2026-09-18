@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Bolt
@@ -892,18 +894,51 @@ fun SettingsScreen(
         // (snapshot state) so the controls update the instant a photo is set or cleared.
         // Day streak (#569): consecutive days with a Charge score, computed on-device from your own
         // history. Uses NoopCard directly (not SettingsSection) to keep the wiring self-contained.
-        val streaks by vm.streaks.collectAsStateWithLifecycle()
-        NoopCard(tint = Palette.chargeColor) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(uiString(R.string.settings_streak_title), style = NoopType.subhead, color = Palette.textPrimary)
-                Text(
-                    pluralStringResource(R.plurals.settings_streak_run, streaks.current, streaks.current),
-                    style = NoopType.subhead, color = Palette.chargeColor,
-                )
-                Text(
-                    pluralStringResource(R.plurals.settings_streak_longest, streaks.longest, streaks.longest),
-                    style = NoopType.footnote, color = Palette.textSecondary,
-                )
+        // Whoof: universal search + tabs, most important first. Every SettingsCard/row filters itself off
+        // SettingsFilter (see SettingsComponents.kt).
+        androidx.compose.runtime.DisposableEffect(Unit) { SettingsFilter.reset(); onDispose { SettingsFilter.reset() } }
+        var settingsQuery by SettingsFilter.query
+        var settingsTab by SettingsFilter.tab
+        OutlinedTextField(
+            value = settingsQuery,
+            onValueChange = { settingsQuery = it; SettingsFilter.decided.clear() },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Search settings", style = NoopType.body, color = Palette.textTertiary) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = Palette.textTertiary, modifier = Modifier.size(18.dp)) },
+            trailingIcon = {
+                if (settingsQuery.isNotEmpty()) {
+                    Icon(
+                        Icons.Filled.Close, contentDescription = "Clear", tint = Palette.textTertiary,
+                        modifier = Modifier.size(18.dp).clickable { settingsQuery = ""; SettingsFilter.decided.clear() },
+                    )
+                }
+            },
+            singleLine = true,
+            textStyle = NoopType.body,
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Palette.accent,
+                unfocusedBorderColor = Palette.hairline,
+                cursorColor = Palette.accent,
+                focusedTextColor = Palette.textPrimary,
+                unfocusedTextColor = Palette.textPrimary,
+            ),
+        )
+        if (settingsQuery.isBlank()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SettingsTab.entries.forEach { t ->
+                    val active = t == settingsTab
+                    Text(
+                        t.label,
+                        style = NoopType.number(13f, weight = FontWeight.Bold),
+                        color = if (active) Palette.surfaceBase else Palette.textSecondary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (active) Palette.accent else Palette.surfaceRaised)
+                            .clickable { settingsTab = t }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
             }
         }
 
@@ -3146,7 +3181,7 @@ fun SettingsScreen(
 
         // --- Trends report (#436) — shareable offline PDF over a date range. Self-contained
         // card (its own NoopCard + range picker + CTA), so it drops in without a SettingsSection wrapper.
-        TrendsReportExportSection(vm)
+        Unit   // Whoof: report export removed
         } // end Advanced disclosure content Column
         } // end SettingsDisclosureGroup("Advanced")
 
