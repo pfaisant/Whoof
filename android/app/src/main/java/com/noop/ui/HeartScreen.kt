@@ -63,6 +63,13 @@ fun HeartScreen(viewModel: AppViewModel, onOpenHrvReading: () -> Unit = {}) {
             ?: if (profileStore.age > 0) HrZones.tanakaMaxHR(profileStore.age.toDouble()) else null
     }
     val bpm = live.heartRate?.takeIf { live.connected }
+    val liveRmssd = rollingRMSSD(live.rrRecent)
+    val activeWorkout by viewModel.activeWorkout.collectAsStateWithLifecycle()
+    // Whoof: this tab IS the live screen now — keep the realtime stream armed while it is open.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        viewModel.requestRealtimeHr()
+        onDispose { viewModel.releaseRealtimeHr() }
+    }
     val rhr = displayMetric?.restingHr
     val hrv = displayMetric?.avgHrv
 
@@ -93,7 +100,7 @@ fun HeartScreen(viewModel: AppViewModel, onOpenHrvReading: () -> Unit = {}) {
         topBackground = screenBackdropSlot(showDayCycleBackground, skyBehindCards),
         fullBleedBackground = screenBackdropFullBleed(showDayCycleBackground, skyBehindCards),
     ) {
-        item { LiveBpmHero(bpm = bpm, rhr = rhr, hrv = hrv, maxHr = maxHr, connected = live.connected) }
+        item { LiveBpmHero(bpm = bpm, rhr = rhr, hrv = hrv, maxHr = maxHr, connected = live.connected, liveRmssd = liveRmssd) }
         item {
             // Whoof: the ad-hoc 60-second HRV reading (was on the Live screen).
             androidx.compose.material3.Button(
@@ -103,6 +110,18 @@ fun HeartScreen(viewModel: AppViewModel, onOpenHrvReading: () -> Unit = {}) {
                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Palette.accent, contentColor = Palette.surfaceBase),
             ) {
                 Text(if (live.connected) "Take an HRV reading" else "Connect the strap to take an HRV reading", style = NoopType.headline)
+            }
+        }
+        item {
+            // Whoof: manual workout start/stop, the other thing the old Live screen did.
+            val w = activeWorkout
+            androidx.compose.material3.OutlinedButton(
+                onClick = { if (w == null) viewModel.startWorkout() else viewModel.endWorkout() },
+                enabled = live.connected || w != null,
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = if (w == null) Palette.accent else Palette.statusCritical),
+            ) {
+                Text(if (w == null) "Start a workout" else "End workout", style = NoopType.headline)
             }
         }
         item {
@@ -124,7 +143,7 @@ private val LIQUID_HERO_RADIUS = 26.dp
 
 /** Whoof: the live number floats on a liquid vessel filled to bpm / max HR, then the daily numbers. */
 @Composable
-private fun LiveBpmHero(bpm: Int?, rhr: Int?, hrv: Double?, maxHr: Double?, connected: Boolean) {
+private fun LiveBpmHero(bpm: Int?, rhr: Int?, hrv: Double?, maxHr: Double?, connected: Boolean, liveRmssd: Double? = null) {
     val fraction = if (bpm != null && maxHr != null && maxHr > 0) (bpm / maxHr).coerceIn(0.0, 1.0) else null
     val zoneWord = when {
         bpm == null -> if (connected) "Waiting for the strap" else "Strap not connected"
@@ -180,7 +199,7 @@ private fun LiveBpmHero(bpm: Int?, rhr: Int?, hrv: Double?, maxHr: Double?, conn
             Text(zoneWord, style = NoopType.subhead, color = if (bpm != null) tint else Palette.textTertiary)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.gap)) {
                 HeroStat(Modifier.weight(1f), "Resting", rhr?.toString() ?: "—", "bpm", Palette.metricRose)
-                HeroStat(Modifier.weight(1f), "HRV", hrv?.roundToInt()?.toString() ?: "—", "ms", Palette.metricCyan)
+                HeroStat(Modifier.weight(1f), if (liveRmssd != null) "Live HRV" else "HRV", (liveRmssd ?: hrv)?.roundToInt()?.toString() ?: "—", "ms", Palette.metricCyan)
                 HeroStat(Modifier.weight(1f), "Max", maxHr?.roundToInt()?.toString() ?: "—", "bpm", Palette.effortColor)
             }
         }

@@ -512,40 +512,31 @@ private fun WeekInReviewCard(
     effortScale: EffortScale,
     modifier: Modifier = Modifier,
 ) {
+    // Whoof: one compact row — the week's average Recovery · Strain · Sleep, side by side.
     val chargeAvg = charge.values.averageOrNull()
-    val effortAvg = effort.values.averageOrNull() // stored 0–100 internal Effort scale
+    val effortAvg = effort.values.averageOrNull()
     val restAvg = rest.values.averageOrNull()
     if (chargeAvg == null && effortAvg == null && restAvg == null) return
-
-    NoopCard(modifier = modifier) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SectionHeader(stringResource(R.string.trends_week_in_review), overline = stringResource(R.string.trends_charge_effort_rest))
-            if (chargeAvg != null) {
-                PipScoreRow(
-                    label = stringResource(R.string.trends_charge), value = chargeAvg, range = 0f..100f,
-                    tint = Palette.chargeColor, format = { "${it.roundToInt()}" },
-                )
-            }
-            if (effortAvg != null) {
-                // Effort is stored 0–100 but reads on the user's chosen scale: convert the displayed
-                // number AND the bar position so the pip fill and the count-up value agree. On WHOOP's
-                // 0–21 scale Effort reads to one decimal; on 0–100 it's a whole number.
-                val display = UnitFormatter.effortValue(effortAvg, effortScale)
-                val maxV = UnitFormatter.effortValue(100.0, effortScale)
-                val oneDecimal = effortScale == EffortScale.WHOOP
-                PipScoreRow(
-                    label = stringResource(R.string.trends_effort), value = display, range = 0f..maxV.toFloat(),
-                    tint = Palette.effortColor,
-                    format = { if (oneDecimal) String.format(Locale.US, "%.1f", it) else "${it.roundToInt()}" },
-                )
-            }
-            if (restAvg != null) {
-                PipScoreRow(
-                    label = stringResource(R.string.trends_rest), value = restAvg, range = 0f..100f,
-                    tint = Palette.restColor, format = { "${it.roundToInt()}" },
-                )
+    val effortDisplay = effortAvg?.let { UnitFormatter.effortValue(it, effortScale) }
+    val effortMax = UnitFormatter.effortValue(100.0, effortScale).toFloat()
+    NoopCard(modifier = modifier, padding = Metrics.space14) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Overline(stringResource(R.string.trends_week_in_review) + " · " + stringResource(R.string.trends_avg).lowercase())
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.gap)) {
+                WeekStat(Modifier.weight(1f), stringResource(R.string.trends_charge), chargeAvg?.let { "${it.roundToInt()}" }, chargeAvg?.toFloat(), 100f, Palette.chargeColor)
+                WeekStat(Modifier.weight(1f), stringResource(R.string.trends_effort), effortDisplay?.let { if (effortScale == EffortScale.WHOOP) String.format(Locale.US, "%.1f", it) else "${it.roundToInt()}" }, effortDisplay?.toFloat(), effortMax, Palette.effortColor)
+                WeekStat(Modifier.weight(1f), stringResource(R.string.trends_rest), restAvg?.let { "${it.roundToInt()}" }, restAvg?.toFloat(), 100f, Palette.restColor)
             }
         }
+    }
+}
+
+@Composable
+private fun WeekStat(modifier: Modifier, label: String, value: String?, fraction: Float?, max: Float, tint: Color) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label.uppercase(), style = NoopType.caption, color = Palette.textTertiary, maxLines = 1)
+        Text(value ?: "—", style = NoopType.number(24f, weight = FontWeight.Bold), color = Palette.textPrimary)
+        if (fraction != null) PipBar(value = fraction, range = 0f..max, tint = tint)
     }
 }
 

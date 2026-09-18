@@ -347,7 +347,11 @@ object StrainScorer {
      * scored against the wrong ceiling and reads low — prefer [strain], which resolves the method's own
      * denominator, or pass [logMapDenominator] yourself. (#1545)
      */
+    /** Whoof: user calibration. >1 lowers every strain, <1 raises it; applied inside [trimpToStrain]. */
+    @JvmStatic var userDenominatorScale: Double = 1.0
+
     fun trimpToStrain(trimp: Double, denominator: Double = strainDenominator): Double {
+        @Suppress("NAME_SHADOWING") val denominator = denominator * userDenominatorScale
         if (trimp <= 0) return 0.0
         // D ≤ 1 (and NaN) is outside the map's domain: ln(1) = 0 divides to ±∞, ln(D) < 0 below 1
         // flips the sign, and ln(D) is NaN at or below 0. Out-of-domain D is no score, like

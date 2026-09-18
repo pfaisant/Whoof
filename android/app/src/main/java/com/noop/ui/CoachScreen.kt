@@ -860,33 +860,37 @@ private fun MicComposerRow(
         }
     }
 
+    // Whoof: one rounded pill — text, mic and send inside, no inner box.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(Palette.surfaceOverlay)
-            .border(1.dp, Palette.hairline, RoundedCornerShape(18.dp))
-            .padding(8.dp),
+            .clip(RoundedCornerShape(26.dp))
+            .background(Palette.surfaceRaised)
+            .border(1.dp, Palette.hairline, RoundedCornerShape(26.dp))
+            .padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedTextField(
+        androidx.compose.foundation.text.BasicTextField(
             value = input,
             onValueChange = onInputChange,
-            modifier = Modifier.weight(1f),
-            placeholder = {
-                Text(
-                    if (isRecording) stringResource(R.string.coach_listening) else uiString(R.string.l10n_coach_screen_ask_your_coach_b1577d4c),
-                    style = NoopType.body,
-                    color = Palette.textTertiary,
-                )
-            },
-            textStyle = NoopType.body,
-            singleLine = false,
+            modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+            textStyle = NoopType.body.copy(color = Palette.textPrimary),
             maxLines = 4,
             enabled = !sending,
-            colors = coachFieldColors(),
-            shape = RoundedCornerShape(14.dp),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(Palette.accent),
+            decorationBox = { inner ->
+                Box {
+                    if (input.isEmpty()) {
+                        Text(
+                            if (isRecording) stringResource(R.string.coach_listening) else uiString(R.string.l10n_coach_screen_ask_your_coach_b1577d4c),
+                            style = NoopType.body,
+                            color = Palette.textTertiary,
+                        )
+                    }
+                    inner()
+                }
+            },
         )
 
         // K4: mic button — on-device voice input. Hidden entirely when on-device recognition

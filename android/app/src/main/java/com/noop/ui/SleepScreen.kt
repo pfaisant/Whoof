@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.WbTwilight
+import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.filled.Add
@@ -350,7 +352,12 @@ fun SleepScreen(
     // #sleep-layout: the arrangeable analytical-card order + explicit hidden set (SleepLayoutPrefs).
     // SharedPreferences isn't reactive, so hold it in state and refresh after the Arrange sheet saves.
     // Mirrors TodayScreen's section-order state.
-    var sleepSectionOrder by remember { mutableStateOf(SleepLayoutPrefs.order(context)) }
+    var sleepSectionOrder by remember {
+        // Whoof: whatever was saved, the numbers (Night detail) come before the stage chart.
+        val saved = SleepLayoutPrefs.order(context)
+        val nd = saved.indexOf(SleepSection.NIGHT_DETAIL); val st = saved.indexOf(SleepSection.STAGES)
+        mutableStateOf(if (nd > st && st >= 0) saved.toMutableList().apply { remove(SleepSection.NIGHT_DETAIL); add(st, SleepSection.NIGHT_DETAIL) }.toList() else saved)
+    }
     var hiddenSections by remember { mutableStateOf(SleepLayoutPrefs.hidden(context)) }
     var showSleepArrange by remember { mutableStateOf(false) }
     // #sleep-layout (hold-to-drag): the hoisted list state (the drag math needs layoutInfo + scrollBy) and
@@ -757,7 +764,7 @@ fun SleepScreen(
                     NightNavHeader(
                         nightOffset, nightLabel, max(navDays.lastIndex, 0),
                         navHeaderClockLabel(night?.clockLabel, navDays, nightOffset, is24h),
-                        { nightOffset = it }, night?.session,
+                        { nightOffset = it }, null,   // Whoof: no edit/delete/nap icons under the night pill
                         heroGroup = night?.heroGroup.orEmpty(), onUpdateTimes = onUpdateTimesCb,
                         onDeleteSession = onDeleteSessionCb, onAddNap = onAddNapCb, onPickNightDate = onPickNightDate,
                     )
@@ -1231,58 +1238,43 @@ private val LIQUID_HERO_RADIUS: Dp = 26.dp
 
 @Composable
 private fun RestHero(score: Double?, asleepMin: Double?, source: String, overline: String, onsetTs: Long? = null, wakeTs: Long? = null) {
-    Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                // The liquid hero CARD: a translucent near-black that floats over the day-of-sky so the
-                // vessel + white count-up number stay crisp. Rounded 26 corner + a faint white hairline give
-                // the frosted-glass edge of the liquid Today heroCard (fill rgba(13,14,20,.80), stroke
-                // white@0.11). Replaces the per-hero night atmosphere (the sky now lives at screen level).
-                .clip(RoundedCornerShape(LIQUID_HERO_RADIUS))
-                .background(Palette.heroFill.copy(alpha = Palette.heroFill.alpha * CardAppearance.opacity))
-                .border(1.dp, Palette.heroBorder.copy(alpha = Palette.heroBorder.alpha * CardAppearance.opacity), RoundedCornerShape(LIQUID_HERO_RADIUS)),
+    // Whoof: one compact card — the score vessel on the left, the night's duration and window on the right.
+    val is24h = ClockPrefs.uses24Hour(LocalContext.current)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(LIQUID_HERO_RADIUS))
+            .background(Palette.heroFill.copy(alpha = Palette.heroFill.alpha * CardAppearance.opacity))
+            .border(1.dp, Palette.heroBorder.copy(alpha = Palette.heroBorder.alpha * CardAppearance.opacity), RoundedCornerShape(LIQUID_HERO_RADIUS)),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(Metrics.space16),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Metrics.space16),
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(Metrics.space16),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Metrics.space8),
-            ) {
-                if (score != null) {
-                    // The sleep-performance score as a liquid VESSEL, filled to score/100 in the Rest colour
-                    // (the SAME recovery-colour scale the BevelGauge tipColor used), with the number counting
-                    // up over it. The vessel runs live (slosh + tilt) since a real value is loaded. Mirrors
-                    // the Today HeroScoreVessel.
-                    SleepHeroVessel(
-                        fraction = (score / 100.0).coerceIn(0.0, 1.0),
-                        value = score,
-                        tint = Palette.restColor,
-                        diameter = 128.dp,   // Whoof: compact hero
-                    )
-                    // Whoof: the night's duration rides with the score, not two cards further down.
-                    Text(
-                        listOfNotNull(asleepMin?.let { durationText(it) + " asleep" }, sleepScoreWord(score)).joinToString(" · "),
-                        style = NoopType.subhead, color = Palette.textSecondary,
-                    )
-                } else {
-                    // No 0–100 score for the night — lead with hours slept as a big rounded headline
-                    // whose minutes tick up on appear (the same count-up the scored hero rolls). Mirrors the
-                    // macOS SleepView.restHero CountUpText fallback.
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(Metrics.space4),
-                        modifier = Modifier.padding(vertical = Metrics.space16),
-                    ) {
-                        CountUpText(
-                            value = asleepMin ?: 0.0,
-                            format = { durationText(it) },
-                            style = NoopType.number(46f),
-                            color = Palette.restBright,
-                        )
-                        Text(uiString(R.string.l10n_sleep_screen_asleep_last_night_b969b068), style = NoopType.subhead, color = Palette.textSecondary)
+            if (score != null) {
+                SleepHeroVessel(fraction = (score / 100.0).coerceIn(0.0, 1.0), value = score, tint = Palette.restColor, diameter = 104.dp)
+            } else {
+                Box(Modifier.size(104.dp), contentAlignment = Alignment.Center) {
+                    Text("—", style = NoopType.number(36f), color = Palette.textTertiary)
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+                Text(overline.uppercase(), style = NoopType.caption, color = Palette.textTertiary)
+                Text(asleepMin?.let { durationText(it) } ?: "—", style = NoopType.number(34f, weight = androidx.compose.ui.text.font.FontWeight.Bold), color = Palette.restBright)
+                Text(
+                    listOfNotNull(score?.let { sleepScoreWord(it) }, if (asleepMin != null) "asleep" else null).joinToString(" · "),
+                    style = NoopType.footnote, color = Palette.textSecondary,
+                )
+                if (onsetTs != null && wakeTs != null && wakeTs > onsetTs) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = Metrics.space4)) {
+                        Icon(Icons.Outlined.NightsStay, contentDescription = null, tint = Palette.textTertiary, modifier = Modifier.size(14.dp))
+                        Text(clockTimeLabel(onsetTs, is24h), style = NoopType.number(15f), color = Palette.textPrimary)
+                        Text("→", style = NoopType.footnote, color = Palette.textTertiary)
+                        Icon(Icons.Outlined.WbTwilight, contentDescription = null, tint = Palette.textTertiary, modifier = Modifier.size(14.dp))
+                        Text(clockTimeLabel(wakeTs, is24h), style = NoopType.number(15f), color = Palette.textPrimary)
                     }
                 }
-                if (onsetTs != null && wakeTs != null && wakeTs > onsetTs) SleepWindowRow(onsetTs, wakeTs)
             }
         }
     }

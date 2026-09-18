@@ -3377,14 +3377,23 @@ fun SettingsScreen(
         // Whoof: the sleep-detection knobs (SleepTuning) with a recompute.
         SettingsCard(
             icon = Icons.Filled.Bedtime,
-            title = "Sleep detection",
-            blurb = "How the night is found in your heart-rate and motion. Lower the onset threshold or the persistence if Whoof starts your night too late; raise the wake bridge if a bathroom break splits it.",
+            title = "Sleep & strain detection",
+            blurb = "How the night is found in your heart-rate and motion, and how hard Strain scores your day. Lower the onset threshold or the persistence if Whoof starts your night too late; raise the wake bridge if a bathroom break splits it.",
         ) {
             var onsetMult by remember { mutableStateOf(com.noop.analytics.SleepTuning.onsetMult(context)) }
             var onsetEpochs by remember { mutableStateOf(com.noop.analytics.SleepTuning.onsetEpochs(context)) }
             var wakeBridge by remember { mutableStateOf(com.noop.analytics.SleepTuning.wakeBridgeMin(context)) }
             var sparseBridge by remember { mutableStateOf(com.noop.analytics.SleepTuning.sparseBridgeMin(context)) }
+            var strainScale by remember { mutableStateOf(com.noop.analytics.SleepTuning.strainScale(context)) }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Strain calibration — raise it if Whoof reads higher than WHOOP", style = NoopType.footnote, color = Palette.textSecondary, modifier = Modifier.weight(1f))
+                    Text(String.format(java.util.Locale.US, "×%.2f", strainScale), style = NoopType.footnote, color = Palette.accent)
+                }
+                Slider(value = strainScale.toFloat(), onValueChange = { strainScale = (it * 20).roundToInt() / 20.0 },
+                    onValueChangeFinished = { com.noop.analytics.SleepTuning.set(context, strainScale = strainScale) },
+                    valueRange = 0.5f..3.0f, steps = 49,
+                    colors = SliderDefaults.colors(thumbColor = Palette.accent, activeTrackColor = Palette.accent, inactiveTrackColor = Palette.surfaceInset))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Onset HR threshold (× night baseline)", style = NoopType.footnote, color = Palette.textSecondary)
                     Text(String.format(java.util.Locale.US, "%.2f", onsetMult), style = NoopType.footnote, color = Palette.accent)
@@ -3429,6 +3438,7 @@ fun SettingsScreen(
                             onsetEpochs = com.noop.analytics.SleepTuning.DEFAULT_ONSET_EPOCHS
                             wakeBridge = com.noop.analytics.SleepTuning.DEFAULT_WAKE_BRIDGE_MIN
                             sparseBridge = com.noop.analytics.SleepTuning.DEFAULT_SPARSE_BRIDGE_MIN
+                            strainScale = com.noop.analytics.SleepTuning.DEFAULT_STRAIN_SCALE
                             vm.recomputeNightsNow()
                         },
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Palette.textSecondary),

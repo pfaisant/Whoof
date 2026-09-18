@@ -2643,7 +2643,7 @@ private fun LiquidTodayHeader(
             // Whoof: the date alone; "Today" is implied by the tab.
             Text(
                 if (dayTitle.equals("Today", ignoreCase = true)) humanDate else "$dayTitle · $humanDate",
-                style = NoopType.number(22f, weight = FontWeight.Bold)
+                style = NoopType.number(17f, weight = FontWeight.Bold)
                     .copy(shadow = Shadow(color = Color.Black.copy(alpha = 0.4f), offset = Offset(0f, 1f), blurRadius = 10f)),
                 color = Color.White,
                 maxLines = 1,
@@ -6250,7 +6250,7 @@ internal fun stepsTileShouldOpenCalibration(
     realSteps: Int?,
     estimatedSteps: Int?,
     calibrationPrompt: String?,
-): Boolean = realSteps == null && estimatedSteps == null && calibrationPrompt != null
+): Boolean = realSteps == null   // Whoof: an estimate (or nothing) always opens calibration
 
 /** One compact Key-Metrics tile's data: iOS `ktile`(label, value, unit, tint, frac). [spark] is the
  *  trailing trend series (oldest→newest) the DETAILED tile style graphs, capped at render to the editor's
@@ -7273,7 +7273,8 @@ private fun TodayWorkoutsSection(workouts: List<WorkoutRow>, onSelect: (WorkoutR
     // tap opens the SAME read-only WorkoutDetailSheet the Workouts list uses — nothing there can edit
     // or delete, so a tap from Today carries no risk that list does not already carry.
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
-        feed.forEach { workout ->
+        // Whoof: the same session can arrive from the strap and from Health Connect; keep one per 5-min start.
+        feed.distinctBy { it.startTs / 300L }.forEach { workout ->
             val interaction = remember(workout.startTs, workout.source) { MutableInteractionSource() }
             StatTile(
                 modifier = Modifier

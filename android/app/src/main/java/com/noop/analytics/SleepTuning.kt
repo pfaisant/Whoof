@@ -12,11 +12,13 @@ object SleepTuning {
     const val KEY_ONSET_EPOCHS = "onsetEpochs"      // onsetPersistEpochs
     const val KEY_WAKE_BRIDGE_MIN = "wakeBridgeMin" // GAP_BRIDGE_MAX_MIN
     const val KEY_SPARSE_BRIDGE_MIN = "sparseBridgeMin" // sparseBridgeGapMin
+    const val KEY_STRAIN_SCALE = "strainScale"          // StrainScorer.userDenominatorScale
 
     const val DEFAULT_ONSET_MULT = 1.05
     const val DEFAULT_ONSET_EPOCHS = 3
     const val DEFAULT_WAKE_BRIDGE_MIN = 60
     const val DEFAULT_SPARSE_BRIDGE_MIN = 90
+    const val DEFAULT_STRAIN_SCALE = 1.0
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -24,13 +26,15 @@ object SleepTuning {
     fun onsetEpochs(ctx: Context): Int = prefs(ctx).getInt(KEY_ONSET_EPOCHS, DEFAULT_ONSET_EPOCHS)
     fun wakeBridgeMin(ctx: Context): Int = prefs(ctx).getInt(KEY_WAKE_BRIDGE_MIN, DEFAULT_WAKE_BRIDGE_MIN)
     fun sparseBridgeMin(ctx: Context): Int = prefs(ctx).getInt(KEY_SPARSE_BRIDGE_MIN, DEFAULT_SPARSE_BRIDGE_MIN)
+    fun strainScale(ctx: Context): Double = prefs(ctx).getFloat(KEY_STRAIN_SCALE, DEFAULT_STRAIN_SCALE.toFloat()).toDouble()
 
-    fun set(ctx: Context, onsetMult: Double? = null, onsetEpochs: Int? = null, wakeBridgeMin: Int? = null, sparseBridgeMin: Int? = null) {
+    fun set(ctx: Context, onsetMult: Double? = null, onsetEpochs: Int? = null, wakeBridgeMin: Int? = null, sparseBridgeMin: Int? = null, strainScale: Double? = null) {
         prefs(ctx).edit().apply {
             onsetMult?.let { putFloat(KEY_ONSET_MULT, it.toFloat()) }
             onsetEpochs?.let { putInt(KEY_ONSET_EPOCHS, it) }
             wakeBridgeMin?.let { putInt(KEY_WAKE_BRIDGE_MIN, it) }
             sparseBridgeMin?.let { putInt(KEY_SPARSE_BRIDGE_MIN, it) }
+            strainScale?.let { putFloat(KEY_STRAIN_SCALE, it.toFloat()) }
         }.apply()
         apply(ctx)
     }
@@ -43,6 +47,7 @@ object SleepTuning {
         SleepStager.onsetPersistEpochs = onsetEpochs(ctx).coerceIn(1, 8)
         SleepStager.sparseBridgeGapMin = sparseBridgeMin(ctx).coerceIn(15, 180)
         SleepStageTotals.GAP_BRIDGE_MAX_MIN = wakeBridgeMin(ctx).coerceIn(15, 120)
+        StrainScorer.userDenominatorScale = strainScale(ctx).coerceIn(0.3, 4.0)
     }
 
     fun isDefault(ctx: Context): Boolean =

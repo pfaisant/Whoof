@@ -85,7 +85,8 @@ enum class DashboardCard(
          * simply render a dash, so the default set is safe on a fresh install. Mirrors iOS defaultSelection.
          */
         val defaultSelection: List<DashboardCard> = listOf(
-            STRESS, FITNESS_AGE, VITALITY, HRV, RESTING_HR,
+            // Whoof: by importance; HRV / resting HR live in the Vitals card already.
+            STRESS, VO2MAX, FITNESS_AGE, SKIN_TEMP, VITALITY,
         )
 
         /** Canonical order used to list the disabled remainder in the editor (matches iOS allCases order). */

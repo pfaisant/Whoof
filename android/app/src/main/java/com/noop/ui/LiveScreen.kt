@@ -1437,7 +1437,7 @@ private fun connectionModeDetail(live: LiveState, activeConnection: Boolean): St
 
 /** A "feel" RMSSD over the recent R-R buffer — time-gap-unaware on purpose (a live indicator, not a
  *  clinical figure; blanked on disconnect by clearedBiometrics). null until ≥3 intervals land. */
-private fun rollingRMSSD(rrRecent: List<Int>): Double? {
+internal fun rollingRMSSD(rrRecent: List<Int>): Double? {
     val values = rrRecent.takeLast(12)
     if (values.size < 3) return null
     val diffs = values.zipWithNext { a, b -> (b - a).toDouble() }

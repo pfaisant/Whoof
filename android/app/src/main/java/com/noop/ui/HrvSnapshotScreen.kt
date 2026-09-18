@@ -19,6 +19,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MonitorHeart
@@ -209,11 +213,17 @@ fun HrvSnapshotScreen(
             }
             Spacer(Modifier.width(8.dp))
             if (bonded) {
-                StatePill("Strap live", tone = StrandTone.Positive)
+                StatePill("Connected", tone = StrandTone.Positive)
             } else {
                 StatePill("Not connected", tone = StrandTone.Warning)
             }
             Spacer(Modifier.weight(1f))
+            // Whoof: what the numbers mean, on demand.
+            var showInfo by remember { mutableStateOf(false) }
+            IconButton(onClick = { showInfo = true }) {
+                Icon(Icons.Filled.Info, contentDescription = "About this reading", tint = Palette.textTertiary)
+            }
+            if (showInfo) HrvInfoDialog(onDismiss = { showInfo = false })
             IconButton(onClick = onClose) {
                 Icon(
                     Icons.Filled.Close,
@@ -444,39 +454,57 @@ private fun ResultCard(result: HrvAnalyzer.HrvResult, fail: HrvFail? = null) {
                     )
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(Metrics.gap)) {
-                    StatTile(
-                        modifier = Modifier.weight(1f),
-                        label = uiString(R.string.l10n_hrv_snapshot_screen_rmssd_e240fd3c),
-                        value = formatHrv(result.rmssd, "%.0f"),
-                        caption = "ms",
-                        accent = Palette.metricPurple,
-                    )
-                    StatTile(
-                        modifier = Modifier.weight(1f),
-                        label = uiString(R.string.l10n_hrv_snapshot_screen_sdnn_9ab9ee2a),
-                        value = formatHrv(result.sdnn, "%.0f"),
-                        caption = "ms",
-                        accent = Palette.restBright,
-                    )
-                    StatTile(
-                        modifier = Modifier.weight(1f),
-                        label = uiString(R.string.l10n_hrv_snapshot_screen_mean_hr_6c9272dd),
-                        value = formatHrv(meanHr(result.meanNN), "%.0f"),
-                        caption = "bpm",
-                        accent = Palette.metricRose,
-                    )
-                    StatTile(
-                        modifier = Modifier.weight(1f),
-                        label = uiString(R.string.l10n_hrv_snapshot_screen_beats_12aafda0),
-                        value = "${result.nClean}",
-                        caption = "used",
-                        accent = Palette.metricCyan,
-                    )
+                // Whoof: two rows of two, labels on one line.
+                Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Metrics.gap)) {
+                        HrvStat(Modifier.weight(1f), "RMSSD", formatHrv(result.rmssd, "%.0f"), "ms", Palette.metricPurple)
+                        HrvStat(Modifier.weight(1f), "SDNN", formatHrv(result.sdnn, "%.0f"), "ms", Palette.restBright)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(Metrics.gap)) {
+                        HrvStat(Modifier.weight(1f), "Mean HR", formatHrv(meanHr(result.meanNN), "%.0f"), "bpm", Palette.metricRose)
+                        HrvStat(Modifier.weight(1f), "Beats used", "${result.nClean}", "of ${result.nInput}", Palette.metricCyan)
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun HrvStat(modifier: Modifier, label: String, value: String, unit: String, accent: Color) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(Palette.surfaceInset)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(label, style = NoopType.caption, color = Palette.textTertiary, maxLines = 1)
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(value, style = NoopType.number(26f, weight = FontWeight.Bold), color = accent)
+            Text(unit, style = NoopType.caption, color = Palette.textTertiary, modifier = Modifier.padding(bottom = 4.dp))
+        }
+    }
+}
+
+/** Whoof: plain-language explanation of the reading. */
+@Composable
+private fun HrvInfoDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reading your HRV") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Sit still for 60 seconds. The strap sends every heartbeat; the app measures how much the gap between beats varies.", style = NoopType.footnote, color = Palette.textSecondary)
+                Text("RMSSD — the headline HRV, in ms. Higher usually means a more rested nervous system. Compare it to your own nightly HRV, not to other people.", style = NoopType.footnote, color = Palette.textSecondary)
+                Text("SDNN — overall variability over the minute. Moves with RMSSD; a second opinion.", style = NoopType.footnote, color = Palette.textSecondary)
+                Text("Mean HR — your average heart rate during the reading.", style = NoopType.footnote, color = Palette.textSecondary)
+                Text("Beats used — beats kept after removing noisy or irregular ones. Under 20, or too many rejected, and the reading is refused.", style = NoopType.footnote, color = Palette.textSecondary)
+                Text("A daytime seated reading runs lower than your overnight HRV; that is normal.", style = NoopType.footnote, color = Palette.textTertiary)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+    )
 }
 
 // MARK: - Not-bonded hint
@@ -541,9 +569,9 @@ private fun dialValue(phase: HrvPhase, runningRmssd: Double?, result: HrvAnalyze
     }
 
 private fun primaryLabel(phase: HrvPhase): String = when (phase) {
-    HrvPhase.Idle -> "Take an HRV reading"
+    HrvPhase.Idle -> "Start reading"
     HrvPhase.Capturing -> "Cancel"
-    HrvPhase.Done -> "Take another reading"
+    HrvPhase.Done -> "New reading"
 }
 
 private fun instruction(phase: HrvPhase, bonded: Boolean, result: HrvAnalyzer.HrvResult?): String =
