@@ -11,6 +11,7 @@
     <string name="nav_live">实时心率</string>
     <string name="nav_intervals">间歇训练</string>
     <string name="nav_sleep">睡眠</string>
+    <string name="nav_heart">心率</string>
     <string name="sleep_status_calculating_title">正在计算昨夜睡眠…</string>
     <string name="sleep_status_calculating_body">手环历史数据已到达。NOOP 正在识别并分析这一夜的睡眠。</string>
     <string name="sleep_status_sync_failed_title">昨夜睡眠尚未同步</string>

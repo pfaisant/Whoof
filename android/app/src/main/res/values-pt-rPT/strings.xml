@@ -13,6 +13,7 @@
     <string name="nav_live">Em direto</string>
     <string name="nav_intervals">Intervalos</string>
     <string name="nav_sleep">Sono</string>
+    <string name="nav_heart">Coração</string>
     <string name="sleep_status_calculating_title">A calcular o sono da noite passada…</string>
     <string name="sleep_status_calculating_body">O histórico da bracelete chegou. A NOOP está agora a detetar e analisar a noite.</string>
     <string name="sleep_status_sync_failed_title">O sono da noite passada não foi sincronizado</string>

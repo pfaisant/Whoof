@@ -1602,6 +1602,7 @@
     <string name="nav_live">En direct</string>
     <string name="nav_intervals">Intervalles</string>
     <string name="nav_sleep">Sommeil</string>
+    <string name="nav_heart">Cœur</string>
     <string name="nav_breathe">Respirer</string>
     <string name="nav_stress">Stress</string>
     <string name="nav_workouts">Entraînements</string>

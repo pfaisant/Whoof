@@ -13,6 +13,7 @@
     <string name="nav_live">Live</string>
     <string name="nav_intervals">Intervalle</string>
     <string name="nav_sleep">Schlaf</string>
+    <string name="nav_heart">Herz</string>
     <string name="sleep_status_calculating_title">Der Schlaf der letzten Nacht wird berechnet…</string>
     <string name="sleep_status_calculating_body">Dein Strap-Verlauf ist da. NOOP erkennt und analysiert die Nacht jetzt.</string>
     <string name="sleep_status_sync_failed_title">Der Schlaf der letzten Nacht wurde nicht synchronisiert</string>

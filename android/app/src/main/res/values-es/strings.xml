@@ -1584,6 +1584,7 @@
     <string name="nav_live">En vivo</string>
     <string name="nav_intervals">Intervalos</string>
     <string name="nav_sleep">Sueño</string>
+    <string name="nav_heart">Corazón</string>
     <string name="nav_breathe">Respira</string>
     <string name="nav_stress">Estrés</string>
     <string name="nav_workouts">Entrenamientos</string>

@@ -15,6 +15,7 @@
     <string name="nav_live">В реальном времени</string>
     <string name="nav_intervals">Интервалы</string>
     <string name="nav_sleep">Сон</string>
+    <string name="nav_heart">Сердце</string>
     <string name="sleep_status_calculating_title">Рассчитываю сон за прошлую ночь…</string>
     <string name="sleep_status_calculating_body">История с браслета загружена. NOOP сейчас определяет и анализирует ночной сон.</string>
     <string name="sleep_status_sync_failed_title">Сон за прошлую ночь не синхронизирован</string>
