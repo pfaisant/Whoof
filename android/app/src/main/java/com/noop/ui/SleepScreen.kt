@@ -774,8 +774,8 @@ fun SleepScreen(
                         asleepMin = model?.stages?.asleep,
                         source = restHeroSource(imported, night?.dayKey ?: days.lastOrNull()?.day, activeIsOura),
                         overline = nightLabel,
-                        onsetTs = night?.heroOnsetTs ?: night?.session?.effectiveStartTs,
-                        wakeTs = night?.heroWakeTs ?: night?.session?.endTs,
+                        onsetTs = plausibleWindow(night?.heroOnsetTs ?: night?.session?.effectiveStartTs, night?.heroWakeTs ?: night?.session?.endTs)?.first,
+                        wakeTs = plausibleWindow(night?.heroOnsetTs ?: night?.session?.effectiveStartTs, night?.heroWakeTs ?: night?.session?.endTs)?.second,
                     )
                 }
             }
@@ -936,6 +936,10 @@ fun SleepScreen(
                                     }.getOrNull()
                                 }
                                 val caveats = buildList {
+                                    val cs = cavSession
+                                    if (cs != null && cs.endTs - cs.effectiveStartTs > com.noop.analytics.SleepStager.maxMainSleepSpanS) add(
+                                        "This night spans more than 16 hours, which cannot be right: the detector ran on sparse data (strap link dropped or history not offloaded). Keep the link on Always in Settings → Strap and recompute."
+                                    )
                                     coverageNote?.let { add(it) }
                                     if (cavSession?.stagingSparse == true) add(
                                         uiString(R.string.l10n_sleep_screen_may_be_incomplete_7230dc27) + " — " +
@@ -1641,6 +1645,14 @@ private fun OuraRawStagesNote() {
 
 /** The sparse-coverage caveat (#345): a night staged on thin motion data can under-detect and read short
  *  ("slept 8h, shows 1h"). Honest + actionable. Mirrors iOS SleepView.stageIncompleteNote. */
+/** Whoof: a night longer than [com.noop.analytics.SleepStager.maxMainSleepSpanS] is a detection artefact
+ *  (data starvation glues day and night together); show nothing rather than a 19-hour "sleep". */
+internal fun plausibleWindow(onset: Long?, wake: Long?): Pair<Long, Long>? {
+    if (onset == null || wake == null || wake <= onset) return null
+    if (wake - onset > com.noop.analytics.SleepStager.maxMainSleepSpanS) return null
+    return onset to wake
+}
+
 /** Whoof: a right-aligned warning glyph; tapping it shows the night's caveats in a dialog. */
 @Composable
 private fun SleepCaveatIcon(texts: List<String>) {

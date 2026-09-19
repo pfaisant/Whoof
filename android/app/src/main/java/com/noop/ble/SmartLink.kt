@@ -25,7 +25,7 @@ enum class BackgroundMode(val raw: String, val label: String) {
     OFF("off", "Off");
 
     companion object {
-        fun fromRaw(raw: String?): BackgroundMode = entries.firstOrNull { it.raw == raw } ?: SMART
+        fun fromRaw(raw: String?): BackgroundMode = entries.firstOrNull { it.raw == raw } ?: ALWAYS
     }
 }
 

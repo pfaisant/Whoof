@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -100,7 +101,13 @@ fun HeartScreen(viewModel: AppViewModel, onOpenHrvReading: () -> Unit = {}) {
         topBackground = screenBackdropSlot(showDayCycleBackground, skyBehindCards),
         fullBleedBackground = screenBackdropFullBleed(showDayCycleBackground, skyBehindCards),
     ) {
-        item { LiveBpmHero(bpm = bpm, rhr = rhr, hrv = hrv, maxHr = maxHr, connected = live.connected, liveRmssd = liveRmssd) }
+        item {
+            var showBeats by remember { mutableStateOf(false) }
+            Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
+                LiveBpmHero(bpm = bpm, rhr = rhr, hrv = hrv, maxHr = maxHr, connected = live.connected, liveRmssd = liveRmssd, onTapLiveHrv = { showBeats = !showBeats })
+                if (showBeats) LiveBeatsCard(rrRecent = live.rrRecent)
+            }
+        }
         item {
             // Whoof: the ad-hoc 60-second HRV reading (was on the Live screen).
             androidx.compose.material3.Button(
@@ -143,7 +150,7 @@ private val LIQUID_HERO_RADIUS = 26.dp
 
 /** Whoof: the live number floats on a liquid vessel filled to bpm / max HR, then the daily numbers. */
 @Composable
-private fun LiveBpmHero(bpm: Int?, rhr: Int?, hrv: Double?, maxHr: Double?, connected: Boolean, liveRmssd: Double? = null) {
+private fun LiveBpmHero(bpm: Int?, rhr: Int?, hrv: Double?, maxHr: Double?, connected: Boolean, liveRmssd: Double? = null, onTapLiveHrv: () -> Unit = {}) {
     val fraction = if (bpm != null && maxHr != null && maxHr > 0) (bpm / maxHr).coerceIn(0.0, 1.0) else null
     val zoneWord = when {
         bpm == null -> if (connected) "Waiting for the strap" else "Strap not connected"
@@ -199,7 +206,7 @@ private fun LiveBpmHero(bpm: Int?, rhr: Int?, hrv: Double?, maxHr: Double?, conn
             Text(zoneWord, style = NoopType.subhead, color = if (bpm != null) tint else Palette.textTertiary)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.gap)) {
                 HeroStat(Modifier.weight(1f), "Resting", rhr?.toString() ?: "—", "bpm", Palette.metricRose)
-                HeroStat(Modifier.weight(1f), if (liveRmssd != null) "Live HRV" else "HRV", (liveRmssd ?: hrv)?.roundToInt()?.toString() ?: "—", "ms", Palette.metricCyan)
+                HeroStat(Modifier.weight(1f).clickable(onClick = onTapLiveHrv), if (liveRmssd != null) "Live HRV ▾" else "HRV", (liveRmssd ?: hrv)?.roundToInt()?.toString() ?: "—", "ms", Palette.metricCyan)
                 HeroStat(Modifier.weight(1f), "Max", maxHr?.roundToInt()?.toString() ?: "—", "bpm", Palette.effortColor)
             }
         }
@@ -213,6 +220,36 @@ private fun HeroStat(modifier: Modifier, label: String, value: String, unit: Str
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(value, style = NoopType.number(22f, weight = FontWeight.Bold), color = accent)
             Text(unit, style = NoopType.caption, color = Palette.textTertiary, modifier = Modifier.padding(bottom = 3.dp))
+        }
+    }
+}
+
+/** Whoof: the last ~60 beats as instantaneous bpm (60000 / R-R), so the live HRV number has a picture. */
+@Composable
+private fun LiveBeatsCard(rrRecent: List<Int>) {
+    val bpms = rrRecent.filter { it in 300..2000 }.map { 60000f / it }
+    NoopCard(padding = Metrics.space12) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Beat to beat", style = NoopType.caption, color = Palette.textTertiary)
+                if (bpms.isNotEmpty()) Text("${bpms.minOrNull()!!.roundToInt()}–${bpms.maxOrNull()!!.roundToInt()} bpm · ${bpms.size} beats", style = NoopType.caption, color = Palette.textTertiary)
+            }
+            if (bpms.size < 3) {
+                Text("Waiting for interval frames from the strap…", style = NoopType.footnote, color = Palette.textTertiary)
+            } else {
+                val lo = bpms.min() - 2f; val hi = bpms.max() + 2f
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(72.dp)) {
+                    val w = size.width; val h = size.height
+                    val step = w / (bpms.size - 1).coerceAtLeast(1)
+                    val path = androidx.compose.ui.graphics.Path()
+                    bpms.forEachIndexed { i, v ->
+                        val x = i * step
+                        val y = h - ((v - lo) / (hi - lo)).coerceIn(0f, 1f) * h
+                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    drawPath(path, color = Palette.metricCyan, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f))
+                }
+            }
         }
     }
 }

@@ -317,7 +317,7 @@ object NoopPrefs {
      *  `PuffinExperiment.banisterEffortKey`. */
     const val KEY_BANISTER_EFFORT = "noop.banisterEffort"
 
-    fun banisterEffort(context: Context): Boolean = of(context).getBoolean(KEY_BANISTER_EFFORT, true)   // Whoof: accrues from any HR above resting, like WHOOP
+    fun banisterEffort(context: Context): Boolean = of(context).getBoolean(KEY_BANISTER_EFFORT, false)
 
     /** The TRIMP recipe every Effort computation on this device should use. */
     fun effortMethod(context: Context): com.noop.analytics.StrainScorer.Method =
@@ -513,7 +513,7 @@ object NoopPrefs {
         backgroundMode(context) != com.noop.ble.BackgroundMode.OFF
 
     fun setBackgroundConnection(context: Context, enabled: Boolean) {
-        setBackgroundMode(context, if (enabled) com.noop.ble.BackgroundMode.SMART else com.noop.ble.BackgroundMode.OFF)
+        setBackgroundMode(context, if (enabled) com.noop.ble.BackgroundMode.ALWAYS else com.noop.ble.BackgroundMode.OFF)
     }
 
     // Whoof: hybrid link policy. ALWAYS = upstream behaviour (permanent foreground service);
@@ -527,7 +527,7 @@ object NoopPrefs {
         if (raw == null) {
             // Migrate the old boolean once: an explicit OFF stays OFF, everything else becomes SMART.
             val legacyOn = of(context).getBoolean(KEY_BACKGROUND_CONNECTION, true)
-            return if (legacyOn) com.noop.ble.BackgroundMode.SMART else com.noop.ble.BackgroundMode.OFF
+            return if (legacyOn) com.noop.ble.BackgroundMode.ALWAYS else com.noop.ble.BackgroundMode.OFF
         }
         return com.noop.ble.BackgroundMode.fromRaw(raw)
     }
