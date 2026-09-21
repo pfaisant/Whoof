@@ -6250,7 +6250,11 @@ internal fun stepsTileShouldOpenCalibration(
     realSteps: Int?,
     estimatedSteps: Int?,
     calibrationPrompt: String?,
-): Boolean = realSteps == null   // Whoof: an estimate (or nothing) always opens calibration
+): Boolean = realSteps == null && estimatedSteps == null && calibrationPrompt != null
+// Whoof 1.5.0 overrode this to `realSteps == null` so an estimate-only tile opened calibration. That
+// broke StepsTileNavigationTest: a tile showing ANY number must open its trend, and a tile with no
+// calibration prompt has nothing to calibrate. Wrong steps are a Health Connect data problem, not a
+// navigation one; calibration stays reachable from Settings > Steps estimate.
 
 /** One compact Key-Metrics tile's data: iOS `ktile`(label, value, unit, tint, frac). [spark] is the
  *  trailing trend series (oldest→newest) the DETAILED tile style graphs, capped at render to the editor's
