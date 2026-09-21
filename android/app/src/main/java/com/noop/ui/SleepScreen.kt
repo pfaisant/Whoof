@@ -941,7 +941,13 @@ fun SleepScreen(
                                         "This night spans more than 16 hours, which cannot be right: the detector ran on sparse data (strap link dropped or history not offloaded). Keep the link on Always in Settings → Strap and recompute."
                                     )
                                     coverageNote?.let { add(it) }
-                                    if (cavSession?.stagingSparse == true) add(
+                                    // Upstream #2324 + #2331, ported: ask EVERY block of the night (an imported
+                                    // main block carries a nil flag while a computed fragment carries true),
+                                    // and only warn when the night actually reads short. Before this the note
+                                    // fired on one long motion dropout at any night length, i.e. on healthy
+                                    // nights — see [stageSparseNoteApplies].
+                                    val cavSparse = cavGroup.any { it.stagingSparse == true }
+                                    if (stageSparseNoteApplies(cavSparse, model?.stages?.asleep ?: 0.0)) add(
                                         uiString(R.string.l10n_sleep_screen_may_be_incomplete_7230dc27) + " — " +
                                             uiString(R.string.l10n_sleep_screen_little_motion_was_recorded_over_f061b7e4)
                                     )
@@ -1645,6 +1651,33 @@ private fun OuraRawStagesNote() {
 
 /** The sparse-coverage caveat (#345): a night staged on thin motion data can under-detect and read short
  *  ("slept 8h, shows 1h"). Honest + actionable. Mirrors iOS SleepView.stageIncompleteNote. */
+/**
+ * Whether the "May be incomplete" caveat applies. Pure, so it can be tested without a Composable.
+ * Ported from upstream #2324 (`SleepView.stageSparseNoteApplies`), which the fork could not cherry-pick
+ * because it owns its own Sleep screen.
+ *
+ * [stagingSparse] alone is NOT the question the note asks. `SleepStager.isGravitySparse` returns true when
+ * the gravity span is short against the HR span OR when the largest inter-sample gap exceeds `maxGapMin`,
+ * and that second branch is the ordinary WHOOP 4.0 backfill whose only consequence is to ENABLE the
+ * HR-vouched bridge. So one long motion dropout raised it on a complete twelve-hour night, precisely where
+ * the engine had already applied its own mitigation.
+ *
+ * The note's copy claims something narrower and checkable: the night may be under-detected and the total
+ * can read short. So require the total to actually read short. A night at or above the wearer's need cannot
+ * honestly be captioned as possibly reading short, whatever the motion trace looked like.
+ *
+ * A night that staged to NOTHING keeps the caveat: zero asleep is the strongest form of the collapse this
+ * note exists to explain, not an exemption from it.
+ */
+internal fun stageSparseNoteApplies(
+    stagingSparse: Boolean,
+    asleepMin: Double,
+    needHours: Double = com.noop.analytics.RestScorer.defaultSleepNeedHours,
+): Boolean {
+    if (!stagingSparse) return false
+    return asleepMin < needHours * 60.0
+}
+
 /** Whoof: a night longer than [com.noop.analytics.SleepStager.maxMainSleepSpanS] is a detection artefact
  *  (data starvation glues day and night together); show nothing rather than a 19-hour "sleep". */
 internal fun plausibleWindow(onset: Long?, wake: Long?): Pair<Long, Long>? {
