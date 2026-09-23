@@ -41,6 +41,42 @@ object DayCycleResolver {
         return DayCycleWindow("calendar:$day", start, now, day, DayCycleWindow.Source.CALENDAR)
     }
 
+    /** Local midnight on or before [now] — the last boundary a synthetic cycle may open at. */
+    fun midnightOnOrBefore(now: Long, tzOffsetSeconds: Long): Long {
+        val local = now + tzOffsetSeconds
+        val dayNumber = Math.floorDiv(local, SleepStageTotals.SECONDS_PER_DAY)
+        return dayNumber * SleepStageTotals.SECONDS_PER_DAY - tzOffsetSeconds
+    }
+
+    /**
+     * Every local midnight owed a synthetic boundary between [start]'s cycle and [now], oldest first.
+     *
+     * [fallbackMidnightAfter] answers only the FIRST one, and until now that was the whole fallback:
+     * once [ABSOLUTE_MAX_OPEN_SECONDS] tripped, one boundary was synthesised from the onset and the
+     * window then ran to `now` for as long as no further sleep was detected. So the cap that exists to
+     * stop "a stale sleep boundary remaining active forever" installed a replacement boundary that was
+     * itself permanently stale: with the last detected night on 19 Sept, the 21 Sept cycle was still
+     * open on 22 Sept, accumulating Tuesday's steps and heart rate into Monday's row while every day
+     * after the first got no cycle of its own at all — and a day with no cycle entry has no cycle
+     * strain, calories or workout count to show.
+     *
+     * A day is a day whether or not sleep was detected in it, so the gap is filled midnight by
+     * midnight. Empty when the first fallback midnight has not arrived yet (the all-nighter case:
+     * the cycle is over-long but still inside the day it began in).
+     */
+    fun syntheticMidnightsAfter(start: Long, now: Long, tzOffsetSeconds: Long): List<Long> {
+        val first = fallbackMidnightAfter(start, tzOffsetSeconds)
+        val last = midnightOnOrBefore(now, tzOffsetSeconds)
+        if (first > last) return emptyList()
+        val out = ArrayList<Long>()
+        var at = first
+        while (at <= last) {
+            out.add(at)
+            at += SleepStageTotals.SECONDS_PER_DAY
+        }
+        return out
+    }
+
     /** First local midnight that does not truncate a freshly-started sleep cycle. */
     fun fallbackMidnightAfter(start: Long, tzOffsetSeconds: Long): Long {
         val minimum = start + MIN_SYNTHETIC_MIDNIGHT_AGE_SECONDS
@@ -72,7 +108,10 @@ object DayCycleResolver {
         val age = now - latestSleep.startInclusive
         val mustFallback = age >= ABSOLUTE_MAX_OPEN_SECONDS
         if (!mustFallback) return latestSleep.copy(endExclusive = now)
-        val boundary = fallbackMidnightAfter(latestSleep.startInclusive, tzOffsetSeconds)
+        // The NEWEST owed midnight, not the first: the open window must never be older than the day on
+        // screen. See [syntheticMidnightsAfter] for the week this cost.
+        val boundary = syntheticMidnightsAfter(latestSleep.startInclusive, now, tzOffsetSeconds).lastOrNull()
+            ?: fallbackMidnightAfter(latestSleep.startInclusive, tzOffsetSeconds)
         val day = AnalyticsEngine.dayString(boundary, tzOffsetSeconds)
         return DayCycleWindow(
             id = "synthetic:$day",

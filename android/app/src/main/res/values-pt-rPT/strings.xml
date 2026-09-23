@@ -2369,6 +2369,12 @@
     <string name="today_update_scores_building_title">Em direto. As suas pontuações estão a ser criadas.</string>
     <string name="today_update_scores_building_message">A energia, o esforço e o descanso são criados ao longo das próximas noites.</string>
     <string name="today_pending_scores_body">A frequência cardíaca em direto já funciona através da pulseira. A recuperação, o esforço e o sono são criados ao longo das próximas noites e melhoram à medida que a sua referência é aprendida. Para obter já todo o histórico, importe a exportação WHOOP em Fontes de dados; o preenchimento demora cerca de um minuto.</string>
+    <string name="today_refreshed_ago">Atualizado %1$s</string>
+    <string name="today_not_refreshed">Ainda não atualizado</string>
+    <string name="today_history_gap_title">O histórico da pulseira para este dia não chegou</string>
+    <string name="today_history_gap_body">A recuperação, o esforço e o sono são calculados a partir dos registos que a pulseira guarda e transfere. O Whoof não tem nenhum para este dia, por isso não há nada para calcular. É uma falha na transferência, não um cálculo em curso.</string>
+    <string name="today_history_reaches">O histórico chega a %1$s</string>
+    <string name="today_history_none">Ainda sem histórico da pulseira</string>
     <string name="today_live_session_running">Sessão em curso</string>
     <string name="today_live_session_ended">Sessão terminada</string>
     <string name="today_live_session_start">Iniciar sessão</string>
@@ -2784,4 +2790,7 @@
     <string name="l10n_live_screen_reconnect_drops_the_current_link_if_afc27801">Voltar a ligar termina a ligação atual, se existir, e liga-se novamente ao anel. Para emparelhar ou mudar de banda, abra Dispositivos.</string>
     <string name="l10n_settings_screen_ring_gauges_on_today_7a532de2">Indicadores em anel no Hoje</string>
     <string name="l10n_settings_screen_off_returns_the_liquid_vessels_6bb9236e">Desligado repõe os indicadores líquidos.</string>
+    <string name="nav_calibration">Calibração</string>
+    <string name="today_sleep_asleep">Adormeceu</string>
+    <string name="today_sleep_awake">Acordou</string>
 </resources>

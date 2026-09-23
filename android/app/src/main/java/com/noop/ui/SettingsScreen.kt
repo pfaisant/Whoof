@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -509,6 +510,9 @@ fun SettingsScreen(
     onOpenBackupSync: () -> Unit = {},
     onOpenSelfHostedPush: () -> Unit = {},
     onOpenStepsCalibration: () -> Unit = {},
+    // Whoof: the Device tab's "Paired devices" row.
+    onOpenDevices: () -> Unit = {},
+    onOpenCalibration: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -926,18 +930,31 @@ fun SettingsScreen(
             ),
         )
         if (settingsQuery.isBlank()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Whoof: the three things people come to Settings for, one tap each.
+            SettingsQuickActions(
+                onCalibration = onOpenCalibration,
+                onShareLogs = { scope.launch { LogExport.shareStrapLog(context, vm.ble.exportLogText()) } },
+                onDrive = { scope.launch { DriveExport.saveStrapLog(context, vm.ble.exportLogText()) } },
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 SettingsTab.entries.forEach { t ->
                     val active = t == settingsTab
+                    // Whoof: equal-width segments, so five tabs fit whole on a phone instead of scrolling.
                     Text(
                         t.label,
-                        style = NoopType.number(13f, weight = FontWeight.Bold),
+                        style = NoopType.number(12.5f, weight = FontWeight.Bold),
                         color = if (active) Palette.surfaceBase else Palette.textSecondary,
+                        maxLines = 1,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         modifier = Modifier
+                            .weight(1f)
                             .clip(RoundedCornerShape(50))
                             .background(if (active) Palette.accent else Palette.surfaceRaised)
                             .clickable { settingsTab = t }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .padding(horizontal = 2.dp, vertical = 9.dp),
                     )
                 }
             }
@@ -1171,11 +1188,6 @@ fun SettingsScreen(
                 }
                 if (profile.hasCustomHrZones) {
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = uiString(R.string.l10n_settings_screen_custom_hr_zones_hint_f7fa3bae),
-                        style = NoopType.footnote,
-                        color = Palette.textTertiary,
-                    )
                     profile.hrZoneThresholds?.forEachIndexed { index, value ->
                         SettingsRowDivider()
                         SettingsFormRow(label = uiString(R.string.l10n_settings_screen_zone_starts_a0a60d45, index + 1)) {
@@ -1203,11 +1215,6 @@ fun SettingsScreen(
                         onPlus = { mutate { profile.stepTicksPerStep = ProfileStore.steppedStepScale(profile.stepTicksPerStep, up = true) } },
                     )
                 }
-                Text(
-                    uiString(R.string.l10n_settings_screen_counter_ticks_per_step_leave_at_3ce8c1d5),
-                    style = NoopType.footnote,
-                    color = Palette.textTertiary,
-                )
                 SettingsRowDivider()
                 // Tap-through to the WHOOP 4.0 steps-ESTIMATE calibration (a SEPARATE thing from the 5/MG
                 // @57 counter divisor above): a 4.0 sends no step count, so NOOP estimates steps from
@@ -1239,11 +1246,6 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Text(uiString(R.string.l10n_settings_screen_steps_estimate_ce7a604d), style = NoopType.body, color = Palette.textPrimary, modifier = Modifier.weight(1f))
-                    Text(
-                        stepsSummary,
-                        style = NoopType.footnote,
-                        color = if (profile.stepsManualCoefficient > 0) Palette.accent else Palette.textTertiary,
-                    )
                     Icon(
                         Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null,
@@ -1251,11 +1253,6 @@ fun SettingsScreen(
                         modifier = Modifier.size(18.dp),
                     )
                 }
-                Text(
-                    uiString(R.string.l10n_settings_screen_for_a_whoop_4_0_which_df865854),
-                    style = NoopType.footnote,
-                    color = Palette.textTertiary,
-                )
             }
         }
 
@@ -1666,11 +1663,6 @@ fun SettingsScreen(
                         style = NoopType.subhead,
                         color = Palette.textPrimary,
                     )
-                    Text(
-                        uiString(R.string.l10n_settings_screen_shows_a_soft_sunrise_day_dusk_2d20b417),
-                        style = NoopType.footnote,
-                        color = Palette.textTertiary,
-                    )
                 }
                 Switch(
                     checked = showDayCycleBackground,
@@ -1702,11 +1694,6 @@ fun SettingsScreen(
                         style = NoopType.subhead,
                         color = if (showDayCycleBackground) Palette.textPrimary else Palette.textTertiary,
                     )
-                    Text(
-                        uiString(R.string.l10n_settings_screen_extends_the_sky_behind_the_whole_39bb82cc),
-                        style = NoopType.footnote,
-                        color = Palette.textTertiary,
-                    )
                 }
                 Switch(
                     enabled = showDayCycleBackground,
@@ -1737,11 +1724,6 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Transparent cards", style = NoopType.subhead, color = Palette.textPrimary)
-                    Text(
-                        "Let the background show through every card. Tune how much just below.",
-                        style = NoopType.footnote,
-                        color = Palette.textTertiary,
-                    )
                 }
                 Switch(
                     checked = cardOpacity < 1f,
@@ -1780,11 +1762,6 @@ fun SettingsScreen(
                         color = Palette.accent,
                     )
                 }
-                Text(
-                    uiString(R.string.l10n_settings_screen_how_see_through_the_cards_heart_436105b9),
-                    style = NoopType.footnote,
-                    color = Palette.textTertiary,
-                )
                 Slider(
                     // The slider shows TRANSPARENCY (0 = solid, 1 = fully clear); we store the OPACITY.
                     value = 1f - cardOpacity,
@@ -1901,7 +1878,6 @@ fun SettingsScreen(
             // bar updates live underneath the sheet - the whole point is seeing it against your own screen.
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(uiString(R.string.l10n_settings_screen_bar_transparency_3f648fbb), style = NoopType.subhead, color = Palette.textPrimary)
-                Text(uiString(R.string.l10n_settings_screen_how_see_through_the_bar_is_ddb0c208), style = NoopType.footnote, color = Palette.textTertiary)
                 Slider(
                     value = BottomBarStyleStore.opacityStep.toFloat(),
                     // Live while dragging, persisted once on release: a drag emits a value per frame, and
@@ -2040,519 +2016,48 @@ fun SettingsScreen(
             }
         }
 
-        // --- Strap ---
-        SettingsCard(
-            icon = Icons.Filled.Sensors,
-            title = uiString(R.string.l10n_settings_screen_strap_02b88eeb),
-            blurb = "NOOP pairs directly with your WHOOP over Bluetooth: no WHOOP app, no cloud.",
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    StatePill(
-                        title = strapStatusTitle(live.encryptedBond, live.bonded, live.connected),
-                        tone = strapTone(live.encryptedBond, live.bonded, live.connected),
-                        pulsing = live.connected,
-                    )
-                    live.batteryPct?.let { pct ->
-                        StatePill(
-                            title = uiString(R.string.l10n_settings_screen_battery_pct_roundtoint_e02e2891, pct.roundToInt()) +
-                                if (live.charging == true) " · Charging" else "",
-                            tone = batteryTone(pct),
-                            showsDot = false,
-                        )
+        // --- Google Drive --- Whoof: register a folder once, then data and logs land there in one tap.
+        if (SettingsFilter.tab.value == SettingsTab.DATA && SettingsFilter.query.value.isBlank()) {
+            DriveShelf(
+                onConnect = onOpenBackupSync,
+                onSaveData = {
+                    scope.launch {
+                        val ok = DriveExport.saveBackupNow(context)
+                        Toast.makeText(context, if (ok) "Backup saved" else "Connect a Drive folder first", Toast.LENGTH_SHORT).show()
                     }
-                }
-                Text(
-                    strapStatusDetail(live.encryptedBond, live.bonded, live.connected, live.scanning),
-                    style = NoopType.subhead,
-                    color = Palette.textSecondary,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    NoopButton(
-                        text = if (live.scanning) "Searching…" else "Re-scan",
-                        leadingIcon = Icons.Filled.Refresh,
-                        kind = NoopButtonKind.Primary,
-                        enabled = !live.scanning,
-                        onClick = { requestScan() },
-                    )
-
-                    NoopButton(
-                        text = uiString(R.string.l10n_settings_screen_disconnect_ed28e068),
-                        leadingIcon = Icons.Filled.Cancel,
-                        kind = NoopButtonKind.Secondary,
-                        enabled = live.connected || live.bonded,
-                        onClick = { vm.disconnect() },
-                    )
-                }
-
-                // Rename the strap's BLE advertising name (WHOOP 4.0 only). Writes the name to the strap
-                // firmware (cmd 77); it reboots to apply, so the new name shows on the next connect. Handy
-                // for a second-hand band stuck on the previous owner's name. Reversible.
-                if (live.connected && !live.whoop5Detected) {
-                    var nameDraft by remember(live.advertisingName) { mutableStateOf(live.advertisingName ?: "") }
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(uiString(R.string.l10n_settings_screen_strap_name_350de547), style = NoopType.subhead, color = Palette.textPrimary)
-                        Text(
-                            uiString(R.string.l10n_settings_screen_rename_your_strap_s_bluetooth_name_6032668b) +
-                                " reboots to apply, then reconnects with the new name.",
-                            style = NoopType.footnote,
-                            color = Palette.textTertiary,
-                        )
-                        OutlinedTextField(
-                            value = nameDraft,
-                            onValueChange = { nameDraft = it.take(24) },
-                            singleLine = true,
-                            placeholder = { Text(uiString(R.string.l10n_settings_screen_whoop_a3650379), style = NoopType.body, color = Palette.textTertiary) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Palette.textPrimary,
-                                unfocusedTextColor = Palette.textPrimary,
-                                focusedBorderColor = Palette.accent,
-                                unfocusedBorderColor = Palette.hairline,
-                                cursorColor = Palette.accent,
-                                focusedContainerColor = Palette.surfaceInset,
-                                unfocusedContainerColor = Palette.surfaceInset,
-                            ),
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            NoopButton(
-                                text = uiString(R.string.l10n_settings_screen_rename_d3f4cb89),
-                                leadingIcon = Icons.Filled.Edit,
-                                kind = NoopButtonKind.Primary,
-                                enabled = live.bonded && nameDraft.isNotBlank(),
-                                onClick = { vm.ble.renameStrap(nameDraft) },
-                            )
-                            live.renameStatus?.let {
-                                Text(it, style = NoopType.footnote, color = Palette.textSecondary, modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                }
-
-                // Keep streaming when the app is closed (Android foreground service). On Mac, NOOP
-                // already keeps your strap connected from the menu bar — just close the window.
-                // Whoof: hybrid link policy.
-                var linkMode by remember { mutableStateOf(NoopPrefs.backgroundMode(context)) }
-                var idleMinutes by remember { mutableStateOf(NoopPrefs.smartIdleMinutes(context)) }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Background link", style = NoopType.subhead, color = Palette.textPrimary)
-                    SegmentedPillControl(
-                        items = com.noop.ble.BackgroundMode.entries,
-                        selection = linkMode,
-                        label = { it.label },
-                        onSelect = {
-                            linkMode = it
-                            backgroundConnection = it != com.noop.ble.BackgroundMode.OFF
-                            vm.setBackgroundMode(it)
-                        },
-                    )
-                    Text(
-                        when (linkMode) {
-                            com.noop.ble.BackgroundMode.ALWAYS -> "Permanent link and notification. Every beat streamed, like before."
-                            com.noop.ble.BackgroundMode.SMART -> "Live while a screen, workout or the night needs it; otherwise the link drops after the idle time and a short sync runs every 30 min. The notification only shows while linked."
-                            com.noop.ble.BackgroundMode.OFF -> "Connect by hand. Nothing runs when the app is closed."
-                        },
-                        style = NoopType.footnote, color = Palette.textTertiary,
-                    )
-                    if (linkMode == com.noop.ble.BackgroundMode.SMART) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Idle before dropping the link", style = NoopType.footnote, color = Palette.textSecondary)
-                            Text("$idleMinutes min", style = NoopType.footnote, color = Palette.accent)
-                        }
-                        Slider(
-                            value = idleMinutes.toFloat(),
-                            onValueChange = { idleMinutes = it.roundToInt() },
-                            onValueChangeFinished = { NoopPrefs.setSmartIdleMinutes(context, idleMinutes) },
-                            valueRange = 5f..60f,
-                            steps = 10,
-                            colors = SliderDefaults.colors(thumbColor = Palette.accent, activeTrackColor = Palette.accent, inactiveTrackColor = Palette.surfaceInset),
-                        )
-                    }
-                }
-                SettingsRowDivider()
-
-                // "Faster history sync" (#533, EXPERIMENTAL): asks Android for a shorter GATT connection
-                // interval for the BOUNDED historical-offload burst only. Off by default — BLE behaviour
-                // can't be CI-tested, so this needs real-strap field reports on both the speedup and the
-                // battery cost. The live/overnight stream deliberately never escalates.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            stringResource(R.string.fast_history_sync),
-                            style = NoopType.subhead,
-                            color = Palette.textPrimary,
-                        )
-                        Text(
-                            stringResource(R.string.fast_history_sync_desc),
-                            style = NoopType.footnote,
-                            color = Palette.textTertiary,
-                        )
-                    }
-                    Switch(
-                        checked = fastHistorySync,
-                        onCheckedChange = {
-                            fastHistorySync = it
-                            vm.setFastHistorySync(it)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Palette.surfaceBase,
-                            checkedTrackColor = Palette.accent,
-                            uncheckedThumbColor = Palette.textSecondary,
-                            uncheckedTrackColor = Palette.surfaceInset,
-                            uncheckedBorderColor = Palette.hairline,
-                        ),
-                    )
-                }
-
-                // "Faster Bluetooth link" (#533, EXPERIMENTAL): the other, orthogonal sync-speed lever —
-                // prefer the LE 2M PHY around the offload. Same bytes in half the airtime, so unlike the
-                // interval lever above it should cost LESS strap radio energy, not more. Separate toggle so
-                // a field report can attribute which lever did what. Off by default: the strap may decline
-                // it, 2M trades range for speed, and BLE behaviour can't be CI-tested. The negotiated PHY
-                // lands in the strap log (onPhyUpdate).
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            stringResource(R.string.fast_link_phy),
-                            style = NoopType.subhead,
-                            color = Palette.textPrimary,
-                        )
-                        Text(
-                            stringResource(R.string.fast_link_phy_desc),
-                            style = NoopType.footnote,
-                            color = Palette.textTertiary,
-                        )
-                    }
-                    Switch(
-                        checked = fastLinkPhy,
-                        onCheckedChange = {
-                            fastLinkPhy = it
-                            vm.setFastLinkPhy(it)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Palette.surfaceBase,
-                            checkedTrackColor = Palette.accent,
-                            uncheckedThumbColor = Palette.textSecondary,
-                            uncheckedTrackColor = Palette.surfaceInset,
-                            uncheckedBorderColor = Palette.hairline,
-                        ),
-                    )
-                }
-
-                // "Keep NOOP alive overnight" (#386): the battery-optimisation whitelist, as a one-way
-                // PROMPT rather than a setting.
-                //
-                // Shown only where it can actually change the outcome — background connection on, a ROM
-                // known to kill background work, and the exemption not yet granted. The whitelist helps a
-                // little on any phone (it also exempts from Doze deferral), but NOOP already survives the
-                // night wherever the AOSP foreground-service contract is honoured, so on those phones the
-                // row was noise about a permission the user did not need. A Pixel or Samsung never sees it.
-                //
-                // Deliberately NOT a toggle. Android lets an app ASK for this exemption and never hand it
-                // back, so a switch advertised an off direction it could not honour — which is exactly how
-                // it was reported broken, and why replacing it with a "Manage"/"Allow" action then read as
-                // the control having been taken away. A one-way grant gets a one-way control: state the
-                // problem, offer the single action that works, and DISAPPEAR once it is done. Nothing is
-                // ever on screen implying an off that does not exist. Revoking lives where it actually
-                // lives — Android's own battery settings — and the Test Centre reports the exempt state
-                // for anyone diagnosing a lost night.
-                //
-                // POPUP DISCIPLINE is unchanged: the tap fires exactly ONE system dialog, and the OEM
-                // auto-start screen stays a SEPARATE text-link, never chained onto it.
-
-                // Read unconditionally rather than folded into the `if`: `&&` short-circuits, so a
-                // `remember` inside the condition would go uncalled whenever background connection is off
-                // — a composable call in a conditionally-evaluated position, which is how a slot table
-                // gets corrupted once the condition flips. The gate is one string comparison; the work
-                // worth avoiding sits inside the body regardless.
-                val aggressiveVendor = remember { com.noop.ble.BackgroundHealth.isAggressiveVendor() }
-                if (backgroundConnection && aggressiveVendor) {
-                    // Re-read the LIVE exempt state on every ON_RESUME. This is what makes the row vanish
-                    // the moment the user returns from the grant dialog — and reappear if they later
-                    // revoke it in system settings. Reading it plainly in composition wouldn't recompose
-                    // on resume: the row would linger after a successful grant and invite a SECOND,
-                    // duplicate popup, defeating the popup discipline.
-                    val lifecycleOwner = LocalLifecycleOwner.current
-                    var batteryExempt by remember {
-                        mutableStateOf(com.noop.ble.BackgroundHealth.isBatteryExempt(context))
-                    }
-                    DisposableEffect(lifecycleOwner) {
-                        val obs = LifecycleEventObserver { _, event ->
-                            if (event == Lifecycle.Event.ON_RESUME) {
-                                batteryExempt = com.noop.ble.BackgroundHealth.isBatteryExempt(context)
-                            }
-                        }
-                        lifecycleOwner.lifecycle.addObserver(obs)
-                        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
-                    }
-                    val oemAutostart = remember { com.noop.ble.BackgroundHealth.oemAutostartIntent(context) }
-
-                    if (!batteryExempt) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    uiString(R.string.l10n_settings_screen_keep_noop_alive_overnight_e43b2fba),
-                                    style = NoopType.subhead,
-                                    color = Palette.textPrimary,
-                                )
-                                // #386: this was a hardcoded literal — and INVISIBLE to the i18n gate,
-                                // whose Android regex only matches a literal directly after `Text(`.
-                                // Inside a `Text(if ...)` expression it slid past, so the whole warning
-                                // shipped English-only while the audit reported clean. Now a resource.
-                                //
-                                // Only the vendor-named variant survives: the row no longer appears on a
-                                // phone that isn't one of these, so the generic "some phones" wording had
-                                // no reachable caller.
-                                Text(
-                                    uiString(
-                                        R.string.keep_alive_needed_vendor,
-                                        android.os.Build.MANUFACTURER,
-                                    ),
-                                    style = NoopType.footnote,
-                                    color = Palette.textTertiary,
-                                )
-                                // A SEPARATE, explicit link to the vendor's auto-start screen, which the
-                                // generic whitelist cannot reach. One extra tap by choice — never
-                                // auto-opened alongside the grant dialog.
-                                if (oemAutostart != null) {
-                                    Text(
-                                        uiString(R.string.l10n_settings_screen_some_phones_also_need_auto_start_79b7147b),
-                                        style = NoopType.footnote,
-                                        color = Palette.accent,
-                                        modifier = Modifier
-                                            .padding(top = 6.dp)
-                                            .clickable { runCatching { context.startActivity(oemAutostart) } },
-                                    )
-                                }
-                            }
-                            // The single action. No second state to render: this row only exists while the
-                            // exemption is missing, so "Allow" is the only thing it can ever say.
-                            Text(
-                                uiString(R.string.l10n_settings_screen_allow_3ad0e369),
-                                style = NoopType.subhead,
-                                color = Palette.accent,
-                                modifier = Modifier
-                                    // A bare Text is ~20dp — under the 48dp minimum, and this is the only
-                                    // way to act on the row, so it has to be padded rather than merely
-                                    // present. `.clickable{}` BEFORE `.padding()`: modifiers apply
-                                    // outside-in, so this puts the padding inside the clickable node and
-                                    // grows the target; the reverse would not.
-                                    .clickable(role = Role.Button) {
-                                        // The whole feature exists for ROMs that strip things, so the
-                                        // fallback is guarded too: if the exemption dialog is missing, try
-                                        // the app-settings page; if that is missing as well, no-op rather
-                                        // than crash (the OEM link above is another path).
-                                        runCatching {
-                                            context.startActivity(com.noop.ble.BackgroundHealth.batteryExemptionIntent(context))
-                                        }.onFailure {
-                                            runCatching {
-                                                context.startActivity(com.noop.ble.BackgroundHealth.appBatterySettingsIntent(context))
-                                            }
-                                        }
-                                    }
-                                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                            )
-                        }
-                    }
-                }
-
-                // Continuous HRV capture: keep the dense beat-to-beat (R-R) stream armed even with no Live
-                // screen open, so the strap banks far more data overnight for better HRV/recovery/sleep.
-                // Honest battery framing — continuous HR streaming uses more battery. Needs background
-                // connection on (there's no background link to stream over otherwise). Default OFF.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            uiString(R.string.l10n_settings_screen_continuous_hrv_capture_1f0805d8),
-                            style = NoopType.subhead,
-                            color = Palette.textPrimary,
-                        )
-                        Text(
-                            uiString(R.string.l10n_settings_screen_keeps_the_detailed_beat_to_beat_87b78edd),
-                            style = NoopType.footnote,
-                            color = Palette.textTertiary,
-                        )
-                    }
-                    Switch(
-                        checked = continuousHrv,
-                        onCheckedChange = {
-                            continuousHrv = it
-                            vm.setContinuousHrv(it)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Palette.surfaceBase,
-                            checkedTrackColor = Palette.accent,
-                            uncheckedThumbColor = Palette.textSecondary,
-                            uncheckedTrackColor = Palette.surfaceInset,
-                            uncheckedBorderColor = Palette.hairline,
-                        ),
-                    )
-                }
-
-                // Overnight only (#927): window-gate the continuous stream to the nightly quiet-hours
-                // window. Shown only while Continuous HRV capture is on; default OFF so existing users
-                // keep the always-on behaviour with no migration.
-                if (continuousHrv) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                uiString(R.string.l10n_settings_screen_overnight_only_05747985),
-                                style = NoopType.subhead,
-                                color = Palette.textPrimary,
-                            )
-                            Text(
-                                uiString(R.string.l10n_settings_screen_runs_the_continuous_hrv_stream_only_3fed47c5) +
-                                " Note: continuous background HRV capture (including daytime naps) is paused outside this window. " +
-                                "For on-demand daytime HRV readings (including naps), use the \"Take an HRV reading\" button on the Live screen.",
-                                style = NoopType.footnote,
-                                color = Palette.textTertiary,
-                            )
-                        }
-                        Switch(
-                            checked = continuousHrvOvernight,
-                            onCheckedChange = {
-                                continuousHrvOvernight = it
-                                vm.setContinuousHrvOvernight(it)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Palette.surfaceBase,
-                                checkedTrackColor = Palette.accent,
-                                uncheckedThumbColor = Palette.textSecondary,
-                                uncheckedTrackColor = Palette.surfaceInset,
-                                uncheckedBorderColor = Palette.hairline,
-                            ),
-                        )
-                    }
-                }
-
-                // HRV window (#141) — grouped with the other HRV settings (#155). Measure nightly HRV over
-                // the whole night (NOOP's long-standing value) or DEEP sleep only (WHOOP-style, reads lower
-                // and more comparable to WHOOP/Polar). Unlike the Effort scale this CHANGES the number, so a
-                // switch forces a re-score + re-baseline.
-                SettingsFormRow(label = uiString(R.string.l10n_settings_screen_hrv_window_e74320b8)) {
-                    SegmentedPillControl(
-                        items = listOf(HrvWindow.WHOLE_NIGHT, HrvWindow.DEEP_SLEEP),
-                        selection = hrvWindow,
-                        // #153: "Night" (not "Whole night") so the two-segment pill reads the same as the iOS
-                        // picker and stays short — keeps the label consistent across platforms.
-                        label = { if (it == HrvWindow.DEEP_SLEEP) "Deep sleep" else "Night" },
-                        onSelect = {
-                            hrvWindow = it
-                            UnitPrefs.setHrvWindow(context, it)
-                            // #201: the new window shifts every night's avgHrv, so the HRV baseline must reflect
-                            // it too — but a plain re-score already achieves that. analyzeRecent re-scores the
-                            // recent ~21 nights' avgHrv under the new window AND re-folds the HRV baseline from
-                            // them in the same pass, and the baseline's 14-night-half-life EWMA is dominated by
-                            // that fresh re-scored tail. So DON'T re-anchor the baseline epoch: doing so would
-                            // drop all history and force a multi-night "calibrating" reset for someone who already
-                            // has plenty of nights (that reset reading as "the setting is broken" was #195). Clear
-                            // the analyze watermark so the re-score runs even though the raw HR fingerprint is
-                            // unchanged. A genuine cold-start user (<4 valid nights) still calibrates honestly.
-                            NoopPrefs.setAnalyzeWatermark(context, "")
-                            vm.syncNow()
-                            Toast.makeText(
-                                context,
-                                "Re-scoring your recent nights over the ${if (it == HrvWindow.DEEP_SLEEP) "deep-sleep" else "whole-night"} window. Charge updates as soon as it's done.",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        },
-                    )
-                }
-                Text(
-                    uiString(R.string.l10n_settings_screen_whole_night_is_noop_s_default_fbfff434),
-                    style = NoopType.footnote,
-                    color = Palette.textTertiary,
-                )
-
-                // Diagnostics: export the strap connection log so people can attach it to a bug report.
-                NoopButton(
-                    text = uiString(R.string.l10n_settings_screen_share_strap_log_for_bug_reports_b9802500),
-                    leadingIcon = Icons.Filled.Upload,
-                    kind = NoopButtonKind.Secondary,
-                    fullWidth = true,
-                    enabled = !strapLogBusy,
-                    onClick = {
-                        strapLogBusy = true
-                        scope.launch {
-                            // try/finally: the flag must clear on any exit, not just the happy path (#961 follow-up).
-                            try {
-                                LogExport.shareStrapLog(context, vm.ble.exportLogText())
-                            } finally {
-                                strapLogBusy = false
-                            }
-                        }
-                    },
-                )
-                if (strapLogBusy) {
-                    NoopBusyRow()
-                }
-
-                // "WHOOP 4.0 vs 5.0/MG — what each can read and why" (FI-2 / #490). Shown to BOTH model
-                // owners, so a 4.0 user understands their strap is fully supported (and why the firmware
-                // broadcast-out is 5/MG-only while NOOP's own re-broadcast in Data Sources works on a 4.0).
-                val modelComparisonInteraction = remember { MutableInteractionSource() }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .liquidPress(modelComparisonInteraction)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Palette.surfaceInset)
-                        .border(1.dp, Palette.hairline, RoundedCornerShape(10.dp))
-                        .clickable(
-                            interactionSource = modelComparisonInteraction,
-                            indication = null,
-                        ) { showModelComparison = true }
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                        .semantics { contentDescription = uiString(R.string.l10n_settings_screen_whoop_4_0_versus_5_0_a54c5504) },
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.Info,
-                            contentDescription = null,
-                            tint = Palette.accent,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(uiString(R.string.l10n_settings_screen_whoop_4_0_vs_5_0_2babb05a), style = NoopType.headline, color = Palette.textPrimary)
-                            Text(
-                                uiString(R.string.l10n_settings_screen_what_each_strap_can_read_and_51e7d3fc),
-                                style = NoopType.footnote,
-                                color = Palette.textSecondary,
-                            )
-                        }
-                        Text("›", style = NoopType.title2, color = Palette.accent)
-                    }
-                }
-            }
+                },
+                onSaveLog = { scope.launch { DriveExport.saveStrapLog(context, vm.ble.exportLogText()) } },
+            )
         }
 
+        // --- Device --- Whoof: every connectivity control, redesigned, in its own tab (DeviceSettings.kt).
+        // Replaces the old "Strap" card, the separate Power saving page's controls and the scattered
+        // link experiments. Shown only on the Device tab, or while a search is active and matches.
+        if (SettingsFilter.tab.value == SettingsTab.DEVICE && SettingsFilter.query.value.isBlank()) {
+            DeviceSettingsSection(
+                vm = vm,
+                live = live,
+                requestScan = { requestScan() },
+                onShareStrapLog = {
+                    strapLogBusy = true
+                    scope.launch {
+                        try {
+                            LogExport.shareStrapLog(context, vm.ble.exportLogText())
+                        } finally {
+                            strapLogBusy = false
+                        }
+                    }
+                },
+                strapLogBusy = strapLogBusy,
+                onOpenModelComparison = { showModelComparison = true },
+                onOpen = { route ->
+                    when (route) {
+                        Destination.TestCentre.route -> onOpenTestCentre()
+                        Destination.Devices.route -> onOpenDevices()
+                    }
+                },
+            )
+        }
 
         // Lower-frequency sections collapse behind a single default-closed disclosure (S3) so the
         // screen opens at the everyday handful instead of the full wall of cards. Nothing is removed;
@@ -3455,11 +2960,6 @@ fun SettingsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(uiString(R.string.l10n_settings_screen_recalibrate_charge_baseline_52a05a26), style = NoopType.subhead, color = Palette.textPrimary)
-                    Text(
-                        uiString(R.string.l10n_settings_screen_restarts_the_roughly_4_night_build_84f9f8d0),
-                        style = NoopType.footnote,
-                        color = Palette.textTertiary,
-                    )
                 }
                 NoopButton(
                     text = uiString(R.string.l10n_settings_screen_recalibrate_charge_baseline_52a05a26),
@@ -3852,11 +3352,6 @@ fun SettingsScreen(
                                 style = NoopType.subhead,
                                 color = Palette.textPrimary,
                             )
-                            Text(
-                                uiString(R.string.l10n_settings_screen_once_a_day_noop_asks_github_5683aad3),
-                                style = NoopType.footnote,
-                                color = Palette.textTertiary,
-                            )
                         }
                         Switch(
                             checked = autoCheck,
@@ -3912,10 +3407,6 @@ fun SettingsScreen(
                         }
                     }
 
-                    Text(
-                        uiString(R.string.l10n_settings_screen_checks_github_for_the_latest_version_c10a81e2),
-                        style = NoopType.footnote, color = Palette.textTertiary,
-                    )
                 }
 
                 Text(
@@ -4075,11 +3566,6 @@ fun SettingsScreen(
                     SettingsAttributionRow(repo = "my-whoop", note = "WHOOP 4.0 protocol")
                     SettingsAttributionRow(repo = "goose", note = "WHOOP 5.0 protocol")
                 }
-                Text(
-                    uiString(R.string.l10n_settings_screen_open_source_ble_reverse_engineering_work_40062271),
-                    style = NoopType.footnote,
-                    color = Palette.textTertiary,
-                )
 
                 SettingsRowDivider()
 

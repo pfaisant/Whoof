@@ -13,6 +13,12 @@ class ActiveCycleStepsResolverTest {
         assertEquals(2000L, activeDayCycleStart(DayCycleMode.MIDNIGHT, 1234L, 2000L))
         assertEquals(2000L, activeDayCycleStart(DayCycleMode.SLEEP_ONSET, null, 2000L))
     }
+
+    @Test fun aStaleCycleFromAnEarlierDayDoesNotOwnTheDayOnScreen() {
+        val older = ActiveDayCycle("2026-09-20", 1_000L, null)
+        assertNull(onsetForDisplayedDay(older, "2026-09-21"))
+        assertEquals(4_000L, onsetForDisplayedDay(ActiveDayCycle("2026-09-21", 4_000L, null), "2026-09-21"))
+    }
     private fun day(key: String, steps: Int?) =
         DailyMetric(deviceId = "my-whoop-noop", day = key, steps = steps)
 

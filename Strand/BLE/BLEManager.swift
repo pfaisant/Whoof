@@ -772,6 +772,16 @@ public final class BLEManager: NSObject, ObservableObject {
     /// `ConnectionReadout.linkEpitaph` together so the age is always printed with the value.
     ///
     /// Diagnostic only — nothing reads these to make a decision.
+    /// #2397: how many RSSI readings this link produced, and their worst and total, so the epitaph can
+    /// report a SHAPE rather than a point. #2332 added the periodic read and kept only the latest value,
+    /// so a link that took 200 readings reported one of them. Last alone cannot separate "marginal all
+    /// along" from "walked out of range", which is the question a supervision timeout raises.
+    ///
+    /// Free: fed by readings the periodic read ALREADY takes. No extra radio work, no new timer.
+    private var rssiReads = 0
+    private var rssiWorstDbm: Int?
+    private var rssiSumDbm = 0
+
     private var lastRssiDbm: Int?
     /// When `lastRssiDbm` was read. Monotonic, matching `linkUpSince`, so a wall-clock change mid-link
     /// cannot make the printed age negative. Meaningless unless `lastRssiDbm` is non-nil.
@@ -1467,6 +1477,9 @@ public final class BLEManager: NSObject, ObservableObject {
                                   // Live path: hr/rr are all the realtime decoder yields.
                                   self?.liveHr += c.hr; self?.liveRr += c.rr
                               })
+        // The per-sample host-received readout belongs to the modes that exist for it; without one, the log
+        // carries the summary instead (`LivePersistTrace.StandardHRHostReceivedTrace`).
+        collector?.hostReceivedDetail = { TestCentre.active(.hrv) || TestCentre.active(.connection) }
         // The store can finish bootstrapping AFTER connect(model:) already ran (both wait on
         // poweredOn), so apply the family/clock configuration here too — whichever runs last wins.
         configureCollectorFamily()
@@ -2667,7 +2680,9 @@ public final class BLEManager: NSObject, ObservableObject {
         backfillTimeout?.cancel()
         backfillTimeout = nil
         backfillFrameQueue.removeAll()
-        log("Backfill: session ended — reason=\(reason)")
+        log("Backfill: session ended — reason=\(reason)"
+            + BLEManager.sessionEndedOutcome(reason: reason,
+                                             bankedRows: (backfiller?.sessionRowsPersisted ?? 0) > 0))
         // Inactivity reminder (#419): read-only hook on the natural offload completion (no cadence
         // change). Only on a true HISTORY_COMPLETE — a timeout/disconnect didn't bring a fresh window.
         if reason == "HISTORY_COMPLETE" { maybeBuzzInactivity() }
@@ -3120,6 +3135,40 @@ public final class BLEManager: NSObject, ObservableObject {
     /// real stall.
     nonisolated static func offloadBankedAnything(chunks: Int, rows: Int, deepPackets: Int) -> Bool {
         chunks > 0 || rows > 0 || deepPackets > 0
+    }
+
+    /// #2384: the `HR notify:` line, so a strap log says whether the standard 0x2A37 profile is
+    /// delivering anything at all, and whether what it delivered was usable.
+    ///
+    /// Extracted from the emitter below it, unchanged, because Android had no twin of this line and is
+    /// getting one. A reporter's 5/MG banked `live hr=0 rr=0` on ten consecutive links while the
+    /// historical offload ran perfectly, and an Android log could not distinguish the strap never
+    /// notifying on 0x2A37 from it notifying with a value the 30...220 gate below drops without a word.
+    /// Those call for opposite fixes. Pinning the wording here means the answer reads the same whichever
+    /// platform the log came from.
+    ///
+    /// The range is the value gate's own: `ignored` means the reading reached neither the UI nor the
+    /// store. Twin of the Kotlin `WhoopBleClient.standardHrNotifyLine`.
+    nonisolated static func standardHrNotifyLine(hr: Int, rrCount: Int) -> String {
+        let plausibility = (30...220).contains(hr) ? "" : " ignored"
+        return "HR notify: \(hr) bpm\(plausibility), rr=\(rrCount)"
+    }
+
+    /// #2387: the outcome token on a `session ended` line, so a timeout says whether it achieved anything.
+    ///
+    /// A WHOOP 4.0 routinely ends a PRODUCTIVE offload on the idle timeout, because that firmware finishes
+    /// without emitting HISTORY_COMPLETE. The line said `reason=timeout` either way, and the rows landed on
+    /// the NEXT line, so the alarming half read first and the outcome second. A reporter read six of these
+    /// as six interrupted syncs; so did I, reviewing their log, after reading the code that says otherwise.
+    /// Their session had banked 56,879, 183,266, 37,645 and 40,386 rows under four of those timeouts.
+    ///
+    /// Rows, not frames: a stalled session still receives frames, and rows is what the summary line beside
+    /// this one reports, so the two cannot disagree. Same test the notify path already applies
+    /// (`shouldNotifySuccessfulOffload` on Kotlin). Empty for any other reason, which keeps
+    /// HISTORY_COMPLETE and the disconnect paths byte-identical to before.
+    nonisolated static func sessionEndedOutcome(reason: String, bankedRows: Bool) -> String {
+        guard reason == "timeout" else { return "" }
+        return bankedRows ? " outcome=drained" : " outcome=nothing-banked"
     }
 
     /// #1466: the banner (if any) for an offload that ended on the idle TIMEOUT rather than
@@ -5446,8 +5495,7 @@ public final class BLEManager: NSObject, ObservableObject {
         let now = Date()
         if lastStandardHRLogAt.map({ now.timeIntervalSince($0) >= 30 }) ?? true {
             lastStandardHRLogAt = now
-            let plausibility = (30...220).contains(m.hr) ? "" : " ignored"
-            log("HR notify: \(m.hr) bpm\(plausibility), rr=\(m.rr.count)")
+            log(BLEManager.standardHrNotifyLine(hr: m.hr, rrCount: m.rr.count))
         }
         // R-R: the standard profile is the RELIABLE source (the custom REALTIME_DATA stream
         // usually reports rr_count=0), so always surface intervals when present. setRRIntervals also
@@ -5700,6 +5748,8 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // #1809: this link's inbound tally starts empty; the epitaph on disconnect reports exactly what
         // arrived between here and there.
         inboundFrames = 0; inboundBytes = 0; cmdChannelFrames = 0
+        // #2397: and the per-link signal shape, for the same reason.
+        rssiReads = 0; rssiWorstDbm = nil; rssiSumDbm = 0
         // #1635: same guarantee for the banked tally. Clearing only on teardown would be enough if every
         // link ended in one, and a link that begins without a preceding clean teardown would otherwise
         // open holding the previous link's rows — reporting them as banked on a link that never saw them.
@@ -5903,7 +5953,9 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
             log(ConnectionReadout.linkEpitaph(upMillis: upMs, inboundFrames: inboundFrames,
                                               inboundBytes: inboundBytes, cmdChannelFrames: cmdChannelFrames,
                                               realtimeArmed: realtimeArmedAt != nil, ended: endedReason,
-                                              rssiDbm: lastRssiDbm, rssiAgeMillis: rssiAgeMs))
+                                              rssiDbm: lastRssiDbm, rssiAgeMillis: rssiAgeMs,
+                                              rssiReads: rssiReads, rssiWorstDbm: rssiWorstDbm,
+                                              rssiSumDbm: rssiSumDbm))
             // #1635: LIVE streams only — the offload persists through `Backfiller` and has its own
             // accounting, so folding it in would make a healthy bonded sync read as "nothing banked live
             // for: gravity". Inside the same `linkUpSince` guard for the same reason the epitaph is.
@@ -5924,6 +5976,7 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         }
         // Clear the tally with the link, so a second teardown for the same drop cannot re-report it.
         inboundFrames = 0; inboundBytes = 0; cmdChannelFrames = 0
+        rssiReads = 0; rssiWorstDbm = nil; rssiSumDbm = 0
         liveHr = 0; liveRr = 0; offloadHr = 0; offloadRr = 0
         offloadGravity = 0; offloadResp = 0; offloadSkinTemp = 0; offloadSpo2 = 0; offloadChunks = 0
         linkUpSince = nil
@@ -6330,6 +6383,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         guard !stale else { return }
         lastRssiDbm = rssi
         lastRssiAt = DispatchTime.now()
+        // #2397: fold into the per-link shape. AFTER the stale guard, for the same reason the stash is:
+        // a late answer from a dead link must not be counted against the live one's summary.
+        rssiReads += 1
+        rssiSumDbm += rssi
+        rssiWorstDbm = rssiWorstDbm.map { min($0, rssi) } ?? rssi
     }
 
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {

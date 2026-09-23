@@ -52,6 +52,37 @@ class DayCycleResolverTest {
         )
     }
 
+    /**
+     * The regression this test exists for: a cycle left open for DAYS.
+     *
+     * [DayCycleResolver.ABSOLUTE_MAX_OPEN_SECONDS] exists to stop a stale sleep boundary staying active
+     * forever, and the boundary it installed instead was itself permanently stale — derived from the
+     * ONSET alone, so it never moved however long sleep went undetected. With the last detected night on
+     * the 19th, the 21st's cycle was still the open one on the 22nd: its window swallowed the following
+     * day's steps and heart rate, and no day after the first ever got a cycle of its own.
+     */
+    @Test fun anUndetectedNightDoesNotLeaveYesterdayOwningToday() {
+        val onset = 23 * 3_600L                       // day 0, 23:00
+        val now = 4 * 86_400L + 7 * 3_600L            // day 4, 07:00 — four nights with nothing detected
+        val sleep = DayCycleWindow("night", onset, 0, "1970-01-02", DayCycleWindow.Source.DETECTED_SLEEP)
+        val window = DayCycleResolver.activeWindow(DayCycleMode.SLEEP_ONSET, sleep, now, 0)
+        assertEquals(DayCycleWindow.Source.SYNTHETIC_MIDNIGHT, window.source)
+        // Opens at TODAY's midnight, so the open cycle is at most a day long...
+        assertEquals(4 * 86_400L, window.startInclusive)
+        assertEquals("1970-01-05", window.displayDay)
+        // ...and every day in between is owed its own boundary, not merged into the first.
+        assertEquals(
+            listOf(2 * 86_400L, 3 * 86_400L, 4 * 86_400L),
+            DayCycleResolver.syntheticMidnightsAfter(onset, now, 0),
+        )
+    }
+
+    /** An over-long cycle still inside the day it began in is owed nothing: it is not a gap yet. */
+    @Test fun anAllNighterIsNotYetOwedASyntheticBoundary() {
+        assertEquals(emptyList<Long>(), DayCycleResolver.syntheticMidnightsAfter(3_600L, 20 * 3_600L, 0))
+        assertEquals(listOf(86_400L), DayCycleResolver.syntheticMidnightsAfter(3_600L, 30 * 3_600L, 0))
+    }
+
     @Test fun sleepOnsetCycleStaysOpenAcrossMidnight() {
         val sleep = DayCycleWindow("night", 23 * 3_600L, 0, "1970-01-02", DayCycleWindow.Source.DETECTED_SLEEP)
         assertEquals(

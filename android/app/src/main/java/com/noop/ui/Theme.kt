@@ -484,14 +484,14 @@ object NoopType {
     val title2 = TextStyle(fontFamily = sans, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
     val headline = TextStyle(fontFamily = sans, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
     val body = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 15.sp)
-    val subhead = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 13.sp)
-    val caption = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 12.sp)
-    val footnote = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 11.sp)
+    val subhead = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 14.sp)
+    val caption = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 13.sp)
+    val footnote = TextStyle(fontFamily = sans, fontWeight = FontWeight.Normal, fontSize = 12.5.sp)
 
     /** Overline 11 / Bold, +1.4 tracking, ALL-CAPS at use site. */
     val overline = TextStyle(
-        fontFamily = sans, fontWeight = FontWeight.Bold, fontSize = 11.sp,
-        letterSpacing = 1.4.sp,
+        fontFamily = sans, fontWeight = FontWeight.Bold, fontSize = 12.sp,
+        letterSpacing = 1.0.sp,
     )
 
     /** Mono 13 — raw / log views. */

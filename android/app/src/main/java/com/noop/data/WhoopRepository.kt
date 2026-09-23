@@ -1646,6 +1646,9 @@ class WhoopRepository(
             dao.pairedDevices().filter { it.brand.equals("WHOOP", ignoreCase = true) }.map { it.id },
         )
 
+    /** Whoof: the raw WHOOP source ids a stream read spans (active strap first), for the sleep calibrator. */
+    suspend fun whoopSourceIds(activeDeviceId: String): List<String> = rawWhoopSourceIds(activeDeviceId)
+
     suspend fun sleepSessionsForDevice(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.sleepSessions(deviceId, from, to, limit)
 

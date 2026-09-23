@@ -48,12 +48,39 @@ public enum DayCycleResolver {
         return midnight >= minimum ? midnight : (dayNumber + 1) * SleepStageTotals.secondsPerDay - offsetSec
     }
 
+    /// Kotlin twin: `DayCycleResolver.midnightOnOrBefore`.
+    public static func midnightOnOrBefore(_ now: Int, offsetSec: Int) -> Int {
+        let local = now + offsetSec
+        let dayNumber = Int(floor(Double(local) / Double(SleepStageTotals.secondsPerDay)))
+        return dayNumber * SleepStageTotals.secondsPerDay - offsetSec
+    }
+
+    /// Every local midnight owed a synthetic boundary between `start`'s cycle and `now`, oldest first.
+    ///
+    /// `fallbackMidnight(after:)` answers only the FIRST one, and that was the whole fallback: once
+    /// `absoluteMaxOpenSeconds` tripped, one boundary was synthesised from the onset and the window then
+    /// ran to `now` for as long as no further sleep was detected. So the cap that exists to stop a stale
+    /// boundary remaining active forever installed a replacement that was itself permanently stale — a
+    /// cycle opened two days ago still accumulating today's steps and heart rate into that day's row,
+    /// and every day after the first with no cycle of its own at all.
+    ///
+    /// Kotlin twin: `DayCycleResolver.syntheticMidnightsAfter`.
+    public static func syntheticMidnights(after start: Int, now: Int, offsetSec: Int) -> [Int] {
+        let first = fallbackMidnight(after: start, offsetSec: offsetSec)
+        let last = midnightOnOrBefore(now, offsetSec: offsetSec)
+        guard first <= last else { return [] }
+        return stride(from: first, through: last, by: SleepStageTotals.secondsPerDay).map { $0 }
+    }
+
     /// Kotlin twin: `DayCycleResolver.activeWindow`.
     public static func activeWindow(mode: DayCycleMode, latestSleep: DayCycleWindow?, now: Int,
                                     offsetSec: Int) -> DayCycleWindow {
         guard mode == .sleepOnset, let latestSleep else { return calendarWindow(now: now, offsetSec: offsetSec) }
         let age = now - latestSleep.startInclusive
-        let fallback = fallbackMidnight(after: latestSleep.startInclusive, offsetSec: offsetSec)
+        // The NEWEST owed midnight, not the first: the open window must never be older than the day on
+        // screen. See `syntheticMidnights(after:now:offsetSec:)`.
+        let fallback = syntheticMidnights(after: latestSleep.startInclusive, now: now, offsetSec: offsetSec).last
+            ?? fallbackMidnight(after: latestSleep.startInclusive, offsetSec: offsetSec)
         // Sleep-onset mode stays anchored across midnight unconditionally: only the absolute safety cap
         // may synthesize a fallback boundary. An earlier design gated this on whether awake coverage was
         // reliable and carried a `reliableAwakeCoverage` parameter for it; the gate was dropped but the

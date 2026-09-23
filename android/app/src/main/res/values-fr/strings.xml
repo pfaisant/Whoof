@@ -2376,6 +2376,12 @@
     <string name="today_update_scores_building_title">En direct. Vos scores se construisent.</string>
     <string name="today_update_scores_building_message">L’énergie, l’effort et le repos se construisent au fil des prochaines nuits.</string>
     <string name="today_pending_scores_body">Votre fréquence cardiaque en direct fonctionne déjà avec le bracelet. La récupération, l’effort et le sommeil se construisent au fil des prochaines nuits et gagnent en précision avec votre référence. Pour récupérer tout votre historique, importez votre export WHOOP dans Sources de données ; il sera ajouté en une minute environ.</string>
+    <string name="today_refreshed_ago">Actualisé %1$s</string>
+    <string name="today_not_refreshed">Pas encore actualisé</string>
+    <string name="today_history_gap_title">L\'historique du bracelet n\'est pas arrivé pour ce jour</string>
+    <string name="today_history_gap_body">La récupération, l\'effort et le sommeil sont calculés à partir des enregistrements que le bracelet stocke puis transmet. Whoof n\'en a aucun pour ce jour : il n\'y a rien à calculer. C\'est un trou dans le transfert, pas un calcul en cours.</string>
+    <string name="today_history_reaches">Historique jusqu\'à %1$s</string>
+    <string name="today_history_none">Aucun historique du bracelet</string>
     <string name="today_live_session_running">Session en cours</string>
     <string name="today_live_session_ended">Session terminée</string>
     <string name="today_live_session_start">Démarrer une session</string>
@@ -2791,4 +2797,7 @@
     <string name="l10n_live_screen_reconnect_drops_the_current_link_if_afc27801">Reconnecter coupe le lien actuel, s\'il existe, et se reconnecte à l\'anneau. Pour associer ou changer de bande, ouvrez Appareils.</string>
     <string name="l10n_settings_screen_ring_gauges_on_today_7a532de2">Jauges en anneau sur Aujourd\'hui</string>
     <string name="l10n_settings_screen_off_returns_the_liquid_vessels_6bb9236e">Désactivé rétablit les jauges liquides.</string>
+    <string name="nav_calibration">Calibrage</string>
+    <string name="today_sleep_asleep">Endormi</string>
+    <string name="today_sleep_awake">Réveil</string>
 </resources>

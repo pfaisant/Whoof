@@ -873,6 +873,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // export can answer "what ran when". Idempotent — the stored last-seen version only advances
         // once the transition is recorded, so a background-only launch is caught on the next UI open.
         viewModelScope.launch { recordAppVersionChange() }
+        // Whoof 1.5.9: fit sleep detection to the wearer's reference nights once per launch, after the
+        // first scoring pass has had time to land, and re-score the window if the fit changed anything.
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(20_000)
+            runCatching { calibrateSleep() }
+        }
         // #1121: re-arm the opt-in detailed-capture rolling log on launch, so a capture the user started
         // keeps going across the process being killed (this phone class is not battery-exempt and Android
         // kills the background BLE overnight — the very window a battery capture needs to span).
@@ -1952,6 +1958,49 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * a failure here just leaves the loop to catch up; never throws into the edit caller. CancellationException
      * is rethrown so a ViewModel teardown mid-edit isn't swallowed (matches the loop's #125 handling).
      */
+    /** Latest sleep-calibration report, for the Calibration screen. Null until a run has happened. */
+    val sleepCalibration = kotlinx.coroutines.flow.MutableStateFlow<com.noop.analytics.SleepCalibration.Report?>(
+        com.noop.analytics.SleepCalibration.lastReport(appContext),
+    )
+    val sleepCalibrationRunning = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /**
+     * Replay the reference nights against every candidate edge setting, apply the best one when it beats
+     * the live setting, and re-score so the new edges reach every screen. Safe to call repeatedly.
+     */
+    suspend fun calibrateSleep(): com.noop.analytics.SleepCalibration.Report {
+        sleepCalibrationRunning.value = true
+        try {
+            val report = com.noop.analytics.SleepCalibration.run(appContext, repository, activeStrapId)
+            sleepCalibration.value = report
+            ble.logIdentity(
+                "sleepCalibration nights=${report.usableNights} band=${report.bestBandAnchor} " +
+                    "hrMargin=${report.bestMarginBpm} mae=${report.bestMaeMin?.let { "%.1f".format(it) }} " +
+                    "prev=${report.previousMaeMin?.let { "%.1f".format(it) }} applied=${report.applied} " +
+                    "grade=${report.grade.name}",
+            )
+            // One line per reference night, so an export shows what the replay saw, not only the mean.
+            val z = java.time.ZoneId.systemDefault()
+            fun hm(t: Long?) = t?.let { java.time.Instant.ofEpochSecond(it).atZone(z).toLocalTime().toString().take(5) } ?: "none"
+            for (n in report.nights) {
+                ble.logIdentity(
+                    "sleepCalibration night whoop=${hm(n.ref.bedTs)}-${hm(n.ref.wakeTs)} " +
+                        "whoof=${hm(n.detectedStart)}-${hm(n.detectedEnd)} " +
+                        "onsetErr=${n.onsetErrMin?.toInt()} wakeErr=${n.wakeErrMin?.toInt()} skipped=${n.skipped}",
+                )
+            }
+            if (report.applied) {
+                NoopPrefs.setAnalyzeWatermark(appContext, "")
+                rescoreAfterEdit()
+            }
+            return report
+        } finally {
+            sleepCalibrationRunning.value = false
+        }
+    }
+
+    fun calibrateSleepAsync() { viewModelScope.launch { runCatching { calibrateSleep() } } }
+
     private suspend fun rescoreAfterEdit() {
         runCatching {
             // #1816: set the motion sink before the pass, clear it after (same pattern as the 15-min loop).

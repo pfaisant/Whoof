@@ -46,6 +46,24 @@ class StepCycleIntegrationPolicyTest {
         assertEquals(2, updated.exerciseCount)
     }
 
+    @Test fun aDayTheOpenCycleDoesNotOwnKeepsItsCalendarStrain() {
+        val monday = "2026-09-21"
+        val result = PhysiologicalStepCycleEngine.Result(
+            cycleStepsByWakeDay = emptyMap(),
+            cycleStrainByWakeDay = mapOf("2026-09-20" to 70.0),
+            cycleCaloriesByWakeDay = emptyMap(),
+            cycleWorkoutCountByWakeDay = emptyMap(),
+            boundaryOnsetByWakeDay = emptyMap(),
+            firstCycleWakeDay = "2026-09-19",
+            recoveredOwnerMarkerRows = emptyList(),
+        )
+        val updated = DayCycleIntelligenceIntegration.apply(
+            DailyMetric(deviceId = "strap-noop", day = monday, strain = 53.0),
+            result, "strap-noop", mutableListOf(),
+        )
+        assertEquals(53.0, updated.strain!!, 0.0)
+    }
+
     @Test fun warmUnchangedCycleDoesNotReadStepRowsAgain() {
         val old = DayCycleIntelligenceIntegration.cacheKey(
             owner = "strap-a", sleepId = "night-a", onset = 100, end = 200,

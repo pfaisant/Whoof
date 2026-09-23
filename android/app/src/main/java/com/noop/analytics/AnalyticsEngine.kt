@@ -576,7 +576,15 @@ object AnalyticsEngine {
         // only way to scope them is through the session set itself — which is precisely the "one forgotten
         // call site" a scattered filter invites.
         val physiologySessions = matched.filter { !it.hrOnly }.ifEmpty { matched }
-        val restingHRDaily: Int? = physiologySessions.mapNotNull { it.restingHR }.minOrNull()
+        // Resting Heart Rate: Use PrimarySessionRestingHR (arithmetic sample mean of the longest/primary
+        // sleep session, #1169), eliminating daytime nap floor distortion.
+        // #804: Preserve ring/device-provided resting HR when present in `providedSleep`.
+        // Cleanly falls back to physiologySessions.mapNotNull { it.restingHR }.minOrNull() when coverage is sparse.
+        val providedPrimaryRHR = physiologySessions.maxByOrNull { it.end - it.start }
+            ?.let { p -> providedSleep.firstOrNull { it.start == p.start && it.end == p.end }?.restingHR }
+        val restingHRDaily: Int? = providedPrimaryRHR
+            ?: primarySessionRestingHR(physiologySessions, hr)?.roundToInt()
+            ?: physiologySessions.mapNotNull { it.restingHR }.minOrNull()
         // Daily avg HRV = in-bed-weighted mean of per-session avg HRV.
         val avgHRVDaily: Double? = if (deepHrvWindow) {
             // #141: WHOOP-style HRV — pool RMSSD over DEEP-stage 5-min windows only (slow-wave sleep),

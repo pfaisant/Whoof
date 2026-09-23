@@ -2373,6 +2373,12 @@
     <string name="today_update_scores_building_title">Pomiar działa. Wyniki są tworzone.</string>
     <string name="today_update_scores_building_message">Energia, wysiłek i odpoczynek powstaną w ciągu kilku kolejnych nocy.</string>
     <string name="today_pending_scores_body">Tętno na żywo działa już z opaski. Regeneracja, wysiłek i sen będą tworzone przez kolejne noce i staną się dokładniejsze wraz z bazą. Aby od razu uzyskać całą historię, zaimportuj eksport WHOOP w Źródłach danych.</string>
+    <string name="today_refreshed_ago">Odświeżono %1$s</string>
+    <string name="today_not_refreshed">Jeszcze nie odświeżono</string>
+    <string name="today_history_gap_title">Historia z opaski dla tego dnia nie dotarła</string>
+    <string name="today_history_gap_body">Regeneracja, wysiłek i sen są liczone z zapisów, które opaska gromadzi i przesyła. Whoof nie ma żadnego z nich dla tego dnia, więc nie ma czego liczyć. To luka w przesyłaniu, a nie trwające obliczenia.</string>
+    <string name="today_history_reaches">Historia sięga %1$s</string>
+    <string name="today_history_none">Brak historii z opaski</string>
     <string name="today_live_session_running">Sesja trwa</string>
     <string name="today_live_session_ended">Sesja zakończona</string>
     <string name="today_live_session_start">Rozpocznij sesję</string>
@@ -2800,4 +2806,7 @@
     <string name="l10n_live_screen_reconnect_drops_the_current_link_if_afc27801">Połącz ponownie zrywa bieżące połączenie, jeśli istnieje, i ponownie łączy się z pierścieniem. Aby sparować lub przełączyć pasma, otwórz Urządzenia.</string>
     <string name="l10n_settings_screen_ring_gauges_on_today_7a532de2">Wskaźniki pierścieniowe w Dzisiaj</string>
     <string name="l10n_settings_screen_off_returns_the_liquid_vessels_6bb9236e">Wyłączone przywraca wskaźniki płynne.</string>
+    <string name="nav_calibration">Kalibracja</string>
+    <string name="today_sleep_asleep">Zaśnięcie</string>
+    <string name="today_sleep_awake">Pobudka</string>
 </resources>

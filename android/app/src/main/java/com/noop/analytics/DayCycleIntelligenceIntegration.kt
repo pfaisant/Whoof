@@ -139,7 +139,10 @@ internal object DayCycleIntelligenceIntegration {
         }
         return daily.copy(
             steps = integratedStepValue(daily.steps, established, result.cycleStepsByWakeDay[daily.day]),
-            strain = if (established) result.cycleStrainByWakeDay[daily.day] else daily.strain,
+            // A day the open cycle does not own keeps the calendar-day integral. Nulling it
+            // dropped a real run: the cycle was filed on an earlier wake-day, and the ring then
+            // recomputed from a capped read that no longer contained the run.
+            strain = if (established) result.cycleStrainByWakeDay[daily.day] ?: daily.strain else daily.strain,
             activeKcalEst = if (established) result.cycleCaloriesByWakeDay[daily.day] else daily.activeKcalEst,
             exerciseCount = if (established) result.cycleWorkoutCountByWakeDay[daily.day] else daily.exerciseCount,
         )

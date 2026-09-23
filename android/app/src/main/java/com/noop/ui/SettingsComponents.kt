@@ -1,5 +1,8 @@
 package com.noop.ui
 
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -102,7 +105,7 @@ internal fun SettingsDisclosureGroup(
  * content. A faint brand-green wash anchors the card to NOOP's neutral chrome (mirrors macOS).
  */
 /** Whoof: Settings tabs, most important first. Cards are assigned by title in [settingsTabFor]. */
-internal enum class SettingsTab(val label: String) { MAIN("Main"), LOOK("Look"), DATA("Data"), ADVANCED("Advanced") }
+internal enum class SettingsTab(val label: String) { DEVICE("Device"), MAIN("General"), LOOK("Display"), DATA("Data"), ADVANCED("Advanced") }
 
 /** Whoof: screen-level search + tab state read by every [SettingsCard] and row. Reset on screen entry. */
 internal object SettingsFilter {
@@ -117,8 +120,11 @@ internal fun settingsTabFor(title: String): SettingsTab {
     val t = title.lowercase()
     return when {
         listOf("appearance", "bottom bar", "background", "app icon", "photo").any { it in t } -> SettingsTab.LOOK
+        // Whoof: connectivity lives on the Device tab (DeviceSettings.kt); the 5/MG link probes join it.
+        listOf("whoop 5", "5/mg", "5.0/mg", "strap").any { it in t } -> SettingsTab.DEVICE
         listOf("backup", "push", "export").any { it in t } -> SettingsTab.DATA
-        listOf("experimental", "diagnostic", "test centre", "about").any { it in t } -> SettingsTab.ADVANCED
+        // Whoof: the raw detection sliders are superseded by Calibration; kept, but out of the way.
+        listOf("experimental", "diagnostic", "test centre", "about", "detection").any { it in t } -> SettingsTab.ADVANCED
         else -> SettingsTab.MAIN
     }
 }
@@ -166,7 +172,7 @@ internal fun SettingsCard(
                     Text(title, style = NoopType.title2, color = Palette.textPrimary)
                 }
             }
-            if (q.isBlank()) Text(blurb, style = NoopType.subhead, color = Palette.textSecondary)
+            // Whoof: no card subtitles (owner, 23 Sep 2026). The blurb still feeds search matching above.
             content()
         }
     }
@@ -291,5 +297,53 @@ internal fun SettingsAttributionRow(repo: String, note: String) {
             style = NoopType.footnote,
             color = Palette.textTertiary,
         )
+    }
+}
+
+// MARK: - Whoof quick actions and Drive shelf
+
+/** Three tiles under the settings search: Calibration, Share logs, Drive. */
+@Composable
+internal fun SettingsQuickActions(onCalibration: () -> Unit, onShareLogs: () -> Unit, onDrive: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        QuickTile(androidx.compose.material.icons.Icons.Filled.Tune, "Calibration", onCalibration, Modifier.weight(1f))
+        QuickTile(androidx.compose.material.icons.Icons.Filled.Upload, "Share logs", onShareLogs, Modifier.weight(1f))
+        QuickTile(androidx.compose.material.icons.Icons.Filled.CloudUpload, "Drive", onDrive, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun QuickTile(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier) {
+    Column(
+        modifier = modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(Metrics.cardRadius))
+            .frostedCardSurface(tint = null, cornerRadius = Metrics.cardRadius)
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = Palette.accent, modifier = Modifier.size(22.dp))
+        Text(label, style = NoopType.number(13f, weight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = Palette.textPrimary)
+    }
+}
+
+/** Data tab: the Drive folder, and the two saves that use it. */
+@Composable
+internal fun DriveShelf(onConnect: () -> Unit, onSaveData: () -> Unit, onSaveLog: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val folder = DriveExport.folderLabel(context)
+    DeviceShelf("Google Drive") {
+        DeviceRow(
+            title = if (folder != null) "Folder" else "Connect a Drive folder",
+            onClick = onConnect,
+            control = if (folder != null) {
+                { Text(folder, style = NoopType.captionNumber, color = Palette.accent) }
+            } else null,
+        )
+        DeviceDivider()
+        DeviceRow(title = "Save data now", enabled = folder != null, onClick = onSaveData)
+        DeviceDivider()
+        DeviceRow(title = "Save strap log", onClick = onSaveLog)
     }
 }

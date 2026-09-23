@@ -2498,6 +2498,12 @@
     <string name="today_update_scores_building_title">Live now. Your scores are building.</string>
     <string name="today_update_scores_building_message">Recovery, Strain and Rest build over your next few nights of wear.</string>
     <string name="today_pending_scores_body">Your live heart rate is working from the strap, and recovery, strain and sleep build from it over your next few nights of wear, sharpening as it learns your baseline. Want your full history instantly? Import your WHOOP export in Data Sources and it backfills in about a minute.</string>
+    <string name="today_refreshed_ago">Refreshed %1$s</string>
+    <string name="today_not_refreshed">Not refreshed yet</string>
+    <string name="today_history_gap_title">The strap history for this day hasn\'t arrived</string>
+    <string name="today_history_gap_body">Recovery, strain and sleep are scored from the records the strap banks and hands over. Whoof holds none for this day, so there is nothing to score yet — this is a gap in the offload, not a calculation still running.</string>
+    <string name="today_history_reaches">History reaches %1$s</string>
+    <string name="today_history_none">No strap history yet</string>
     <string name="today_live_session_running">Session running</string>
     <string name="today_live_session_ended">Session ended</string>
     <string name="today_live_session_start">Start session</string>
@@ -2821,4 +2827,7 @@
     <string name="l10n_live_screen_reconnect_drops_the_current_link_if_afc27801">Reconnect drops the current link, if any, and connects to the ring again. To pair or switch bands, open Devices.</string>
     <string name="l10n_settings_screen_ring_gauges_on_today_7a532de2">Ring gauges on Today</string>
     <string name="l10n_settings_screen_off_returns_the_liquid_vessels_6bb9236e">Off returns the liquid vessels.</string>
+    <string name="nav_calibration">Calibration</string>
+    <string name="today_sleep_asleep">Asleep</string>
+    <string name="today_sleep_awake">Awake</string>
 </resources>

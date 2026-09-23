@@ -17,6 +17,17 @@ internal fun activeDayCycleStart(
     calendarStart: Long,
 ): Long = if (mode == DayCycleMode.SLEEP_ONSET) confirmedOrSyntheticOnset ?: calendarStart else calendarStart
 
+/**
+ * Onset to integrate for [dayKey], or null when the open cycle belongs to an earlier day.
+ *
+ * The home ring was starting at the newest onset even when that onset was filed on a previous
+ * wake-day. With no sleep detected since 19 Sept the open cycle began days earlier. The HR read
+ * is `ORDER BY ts ASC LIMIT`, so those old hours filled the cap and a morning run on the day
+ * actually on screen never reached the strain integral.
+ */
+internal fun onsetForDisplayedDay(cycle: ActiveDayCycle?, dayKey: String): Long? =
+    cycle?.takeIf { it.ownerDay == dayKey }?.onsetTs
+
 /** Resolve the newest valid boundary even when this device has no raw step counter. */
 internal fun resolveActiveDayCycle(
     visibleDays: List<DailyMetric>,

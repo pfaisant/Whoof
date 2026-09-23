@@ -176,10 +176,21 @@ internal object PhysiologicalStepCycleEngine {
                     tzOffsetSeconds = tzOffsetSeconds,
                 )
                 if (active.source == DayCycleWindow.Source.SYNTHETIC_MIDNIGHT) {
-                    val synthetic = PhysiologicalSteps.CycleBoundary(active.id, active.startInclusive)
-                    boundaries += synthetic
-                    dayBySleepId[synthetic.sleepId] = active.displayDay
-                    ownerBySleepId[synthetic.sleepId] = owner
+                    // EVERY owed midnight, not only the newest one the resolver returns. A single
+                    // synthetic boundary left one window open from the first fallback midnight to now,
+                    // so after two undetected nights the 21 Sept cycle still owned 22 Sept: Monday's
+                    // steps kept climbing after Monday ended, and Monday's strain was an integral over
+                    // a day and a half. Every day in the gap now gets its own closed window, which is
+                    // also what gives a day with no detected sleep a strain at all.
+                    for (midnight in DayCycleResolver.syntheticMidnightsAfter(
+                        latest.onset, nowSeconds, tzOffsetSeconds,
+                    )) {
+                        val day = AnalyticsEngine.dayString(midnight, tzOffsetSeconds)
+                        val synthetic = PhysiologicalSteps.CycleBoundary("synthetic:$day", midnight)
+                        boundaries += synthetic
+                        dayBySleepId[synthetic.sleepId] = day
+                        ownerBySleepId[synthetic.sleepId] = owner
+                    }
                 }
             }
         }
@@ -195,8 +206,12 @@ internal object PhysiologicalStepCycleEngine {
             val wakeDay = dayBySleepId[window.sleepId] ?: continue
             val fallbackOwner = ownerBySleepId[window.sleepId] ?: continue
             // DAO ranges are inclusive. Keep adjacent physiological cycles disjoint.
+            // [StreamReadCap.HR], not a bare 200_000. The read is `ORDER BY ts ASC LIMIT`, so a window
+            // denser than the cap keeps its OLDEST rows and silently drops its newest — a morning run
+            // integrated to nothing while the log showed a healthy pass. 200_000 was under a 1 Hz day
+            // and a half, which an unrolled synthetic cycle reached routinely.
             val cycleHr = repo.hrSamplesUnion(
-                fallbackOwner, window.onset, window.endExclusive - 1L, 200_000,
+                fallbackOwner, window.onset, window.endExclusive - 1L, StreamReadCap.HR,
             )
             val restingHr = scoredNights.firstOrNull { it.daily.day == wakeDay }?.daily?.restingHr?.toDouble()
                 ?: StrainScorer.defaultRestingHR

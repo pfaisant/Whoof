@@ -245,7 +245,7 @@ object LogExport {
      * Build the shareable strap-log file (header + body + last crash) under cache/logs and return it,
      * so both the single-share and the "raw + log" matched-pair export write the SAME content.
      */
-    private suspend fun writeStrapLogFile(context: Context, logText: String): File {
+    internal suspend fun writeStrapLogFile(context: Context, logText: String): File {
         // Mirror every interactively-shared tail into the durable rolling buffer (#510) so the scheduled
         // background export has a current source even when the live BLE client is gone.
         mirrorToRollingBuffer(logText)
@@ -356,7 +356,7 @@ object LogExport {
         return out
     }
 
-    private fun fileUri(context: Context, file: File) =
+    internal fun fileUri(context: Context, file: File) =
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
     suspend fun shareStrapLog(context: Context, logText: String) {

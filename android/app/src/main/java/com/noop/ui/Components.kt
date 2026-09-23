@@ -206,7 +206,12 @@ fun NoopCard(
 // live now and what an import will backfill. Copy is passed verbatim by the call site.
 
 @Composable
-fun DataPendingNote(title: String, body: String, modifier: Modifier = Modifier) {
+fun DataPendingNote(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+    refreshed: String? = null,
+) {
     NoopCard(modifier = modifier, padding = 18.dp) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -221,6 +226,9 @@ fun DataPendingNote(title: String, body: String, modifier: Modifier = Modifier) 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(title, style = NoopType.headline, color = Palette.textPrimary)
                 Text(body, style = NoopType.subhead, color = Palette.textSecondary)
+                if (refreshed != null) {
+                    Text(refreshed, style = NoopType.caption, color = Palette.textTertiary)
+                }
             }
         }
     }
@@ -435,7 +443,7 @@ fun SourceBadge(text: String, tint: Color = Palette.accent, modifier: Modifier =
     ) {
         Text(
             text = text.uppercase(),
-            style = NoopType.overline.copy(fontSize = 10.sp, letterSpacing = 0.5.sp),
+            style = NoopType.overline.copy(fontSize = 11.sp, letterSpacing = 0.5.sp),
             color = tint,
             maxLines = 1,                      // #74: e.g. "ON-DEVICE" stays on one line, never wraps the hero
             overflow = TextOverflow.Ellipsis,
@@ -596,8 +604,8 @@ fun StatTile(
             }
             if (caption != null) {
                 Text(
-                    caption, style = NoopType.footnote, color = Palette.textTertiary,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    caption, style = NoopType.footnote, color = Palette.textSecondary,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }

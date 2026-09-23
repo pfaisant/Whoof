@@ -2298,6 +2298,12 @@
     <string name="today_update_scores_building_title">实时数据正常，评分正在建立。</string>
     <string name="today_update_scores_building_message">能量、负荷和休息将在接下来的几晚逐步建立。</string>
     <string name="today_pending_scores_body">腕带的实时心率已正常工作。恢复、负荷和睡眠会在接下来的几晚逐步建立，并随着个人基线形成而更准确。如需立即补齐历史记录，请在“数据源”中导入 WHOOP 导出文件，通常约一分钟即可完成。</string>
+    <string name="today_refreshed_ago">已刷新 %1$s</string>
+    <string name="today_not_refreshed">尚未刷新</string>
+    <string name="today_history_gap_title">这一天的腕带历史记录尚未送达</string>
+    <string name="today_history_gap_body">恢复、负荷和睡眠是根据腕带存储并传输的记录计算的。Whoof 没有这一天的任何记录，因此无从计算。这是传输的缺口，而不是仍在进行的计算。</string>
+    <string name="today_history_reaches">历史记录截至 %1$s</string>
+    <string name="today_history_none">尚无腕带历史记录</string>
     <string name="today_live_session_running">训练进行中</string>
     <string name="today_live_session_ended">训练已结束</string>
     <string name="today_live_session_start">开始训练</string>
@@ -2766,4 +2772,7 @@
     <string name="l10n_live_screen_reconnect_drops_the_current_link_if_afc27801">重新连接会断开当前连接（如果有）并再次连接戒指。要配对或切换手环，请打开「设备」。</string>
     <string name="l10n_settings_screen_ring_gauges_on_today_7a532de2">今天页面的环形仪表</string>
     <string name="l10n_settings_screen_off_returns_the_liquid_vessels_6bb9236e">关闭后恢复为液态仪表。</string>
+    <string name="nav_calibration">校准</string>
+    <string name="today_sleep_asleep">入睡</string>
+    <string name="today_sleep_awake">醒来</string>
 </resources>

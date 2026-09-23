@@ -78,13 +78,17 @@ fun HeartScreen(viewModel: AppViewModel, onOpenHrvReading: () -> Unit = {}) {
     LaunchedEffect(days, today?.day, activeDayCycle, dayCycleMode) {
         val zone = ZoneId.systemDefault()
         val now = System.currentTimeMillis() / 1000
+        val dayKey = displayMetric?.day ?: todayDate.toString()
         val start = activeDayCycleStart(
             mode = dayCycleMode,
-            confirmedOrSyntheticOnset = activeDayCycle?.onsetTs,
+            confirmedOrSyntheticOnset = onsetForDisplayedDay(activeDayCycle, dayKey),
             calendarStart = todayDate.atStartOfDay(zone).toEpochSecond(),
         )
-        val todayHr = runCatching { viewModel.repo.hrSamplesUnion(viewModel.activeStrapId, start, now) }
-            .getOrDefault(emptyList())
+        val todayHr = runCatching {
+            viewModel.repo.hrSamplesUnion(
+                viewModel.activeStrapId, start, now, limit = com.noop.analytics.StreamReadCap.HR,
+            )
+        }.getOrDefault(emptyList())
         val restingHr = rhr?.toDouble() ?: StrainScorer.defaultRestingHR
         liveTodayStrain = StrainScorer.strain(
             hr = todayHr,

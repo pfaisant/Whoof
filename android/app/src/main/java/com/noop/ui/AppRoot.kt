@@ -202,6 +202,8 @@ internal enum class Destination(
         Icons.Filled.Tune,
     ),
     TestCentre("test_centre", R.string.nav_test_centre, Icons.Filled.BugReport),
+    // Whoof: sleep-detection calibration against WHOOP reference nights, plus baseline progress.
+    Calibration("calibration", R.string.nav_calibration, Icons.Filled.Tune),
     GroundTruthCollector("ground_truth_collector", R.string.ground_truth_title, Icons.Filled.Sensors),
 
     // The "More" tab: its own navigated page (mirroring the iOS More tab) that hosts the full
@@ -251,12 +253,13 @@ internal val drawerGroups: List<DrawerGroup> = listOf(
     ), defaultExpanded = true),
     DrawerGroup("Data", R.string.more_group_data, listOf(
         Destination.FusedRecord, Destination.DataSources,   // Whoof: no Apple Health
-        Destination.BackupSync, Destination.Devices, Destination.NoopLimitations,
+        Destination.BackupSync, Destination.Devices,   // Whoof: 4.0-vs-5.0 grid lives in Settings → Device
     ), defaultExpanded = false),
+    // Whoof: Power saving and Test Centre live in Settings → Device now; Calibration gets its own entry.
     DrawerGroup("App", R.string.more_group_app, listOf(
-        Destination.Automations, Destination.SmartAlarm, Destination.Notifications,
-        Destination.TestCentre, Destination.PowerSaving, Destination.Settings,
-    ), defaultExpanded = false),
+        Destination.Calibration, Destination.SmartAlarm, Destination.Notifications,
+        Destination.Automations, Destination.Settings,
+    ), defaultExpanded = true),
 )
 
 /** The headers open by default at first run, derived from [drawerGroups.defaultExpanded] (Insights +
@@ -783,6 +786,8 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                     SettingsScreen(
                         viewModel,
                         onOpenTestCentre = { nav.navigate(Destination.TestCentre.route) },
+                        onOpenDevices = { nav.navigate(Destination.Devices.route) },
+                        onOpenCalibration = { nav.navigate(Destination.Calibration.route) },
                         onOpenBackupSync = { nav.navigate(Destination.BackupSync.route) },
                         onOpenSelfHostedPush = { nav.navigate(Destination.SelfHostedPush.route) },
                         onOpenStepsCalibration = { nav.navigate(Destination.StepsCalibration.route) },
@@ -808,6 +813,9 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                     })
                 }
                 composable(Destination.GroundTruthCollector.route) { GroundTruthCollectorScreen(viewModel) }
+                composable(Destination.Calibration.route) {
+                    CalibrationScreen(viewModel, onOpenStepsCalibration = { nav.navigate(Destination.StepsCalibration.route) })
+                }
                 // The "More" page — the iOS More tab's twin: a navigated ScreenScaffold page hosting the
                 // full grouped destination list (was a pull-up sheet). A row pushes its destination so
                 // Android Back returns to More instead of skipping straight to Today.
@@ -1067,11 +1075,12 @@ private fun MoreGroupHeader(title: String, expanded: Boolean, onToggle: () -> Un
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Overline(title, modifier = Modifier.weight(1f), color = Palette.textTertiary)
+        // Whoof: textTertiary vanished on the sky's blue top ("INSIGHTS", "BODY" were unreadable).
+        Overline(title, modifier = Modifier.weight(1f), color = Palette.textPrimary.copy(alpha = 0.78f))
         Icon(
             Icons.Filled.ChevronRight,
             contentDescription = null,
-            tint = Palette.textTertiary,
+            tint = Palette.textPrimary.copy(alpha = 0.6f),
             modifier = Modifier
                 .size(Metrics.iconSmall)
                 .rotate(rotation),
@@ -1264,7 +1273,7 @@ private fun BarSlot(
         Text(
             label,
             style = NoopType.footnote.copy(
-                fontSize = 10.sp * BottomBarStyleStore.scale,
+                fontSize = 11.5.sp * BottomBarStyleStore.scale,
                 fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
             ),
             color = tint,

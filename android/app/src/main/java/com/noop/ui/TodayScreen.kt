@@ -87,6 +87,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1035,15 +1036,20 @@ fun TodayScreen(
             val now = System.currentTimeMillis() / 1000
             val start = activeDayCycleStart(
                 mode = dayCycleMode,
-                confirmedOrSyntheticOnset = activeDayCycle?.onsetTs,
+                confirmedOrSyntheticOnset = onsetForDisplayedDay(activeDayCycle, selectedDayKey),
                 calendarStart = selectedDay.atStartOfDay(zone).toEpochSecond(),
             )
             // #908: read the active strap ∪ canonical "my-whoop" union, NOT a hardcoded "my-whoop". A strap
             // re-added through the device manager banks its live HR under its own fresh id, so a pinned
             // "my-whoop" read returned nothing and Effort integrated to 0 off an empty series. Single-WHOOP
             // install resolves to "my-whoop" ⇒ one id ⇒ byte-identical read.
-            val todayHr = runCatching { viewModel.repo.hrSamplesUnion(viewModel.activeStrapId, start, now) }
-                .getOrDefault(emptyList())
+            // Explicit cap: the 100_000 default is `ORDER BY ts ASC LIMIT`, so a window longer than that
+            // drops the NEWEST rows — the run — and the ring scores what is left.
+            val todayHr = runCatching {
+                viewModel.repo.hrSamplesUnion(
+                    viewModel.activeStrapId, start, now, limit = com.noop.analytics.StreamReadCap.HR,
+                )
+            }.getOrDefault(emptyList())
             // effMaxHR resolution matches AnalyticsEngine: manual HR-max override first, else Tanaka from age.
             val effMaxHR = profileStore.hrMaxOverride.takeIf { it > 0 }?.toDouble()
                 ?: if (profileStore.age > 0) StrainScorer.tanakaHRmax(profileStore.age.toDouble()) else null
@@ -1093,6 +1099,21 @@ fun TodayScreen(
     // row genuinely lacks still falls through to "No Data". Non-null only when: it's today, today has no
     // recovery, and we're not mid-calibration (calibration owns its own copy). days is oldest→newest;
     // exclude the (still-null) today key so we never echo "today". Mirrors iOS lastScoredRecoveryDay.
+    // How far the strap's own banked history reaches on THIS phone — the newest heart-rate sample we
+    // hold, over the active strap ∪ canonical union. It is the fact the empty-score note needs and the
+    // one `lastSyncAt` cannot give: `lastSyncAt` is stamped on every HISTORY_COMPLETE, including the
+    // completed offloads that banked nothing, so a screen quoting it says "refreshed just now" while
+    // no record has arrived for days. Re-read whenever an offload completes or a pass rewrites the days.
+    var historyReachTs by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(days, live.lastSyncAt, live.syncChunksThisSession) {
+        historyReachTs = runCatching {
+            viewModel.repo.latestHrSampleTsUnion(viewModel.activeStrapId)
+        }.getOrNull()
+    }
+    // Has this install EVER scored a night? "Your scores build over your next few nights of wear" is
+    // true for a new strap and false for a user with months of history staring at an empty day; the
+    // note below picks its words from this rather than asserting the new-user case at everyone.
+    val everScoredANight = remember(days) { days.any { it.recovery != null } }
     // #547 carry-over upper bound: the LATER of the logical "today" (rolls at 04:00) and the local
     // calendar day. Using the later key means a legitimate just-after-midnight carry-over of yesterday's
     // logical day is NOT dropped, while any FUTURE-dated row (a bad strap clock) still sorts past it and
@@ -1392,20 +1413,18 @@ fun TodayScreen(
         // The recording-status light and the notifications BELL are GONE from the header (iOS has neither);
         // the Updates inbox is relocated into the "+" quick-actions sheet (AppRoot), so the feature stays one
         // tap away without sitting in the Today header. Staggered in as the first section (index 0).
-        val dayTitle = when (selectedDayOffset) {
-            0 -> uiString(R.string.today_day_today)
-            1 -> uiString(R.string.today_day_yesterday)
-            else -> {
-                val keyDate = runCatching { LocalDate.parse(selectedDayKey) }.getOrNull() ?: selectedDay
-                keyDate.format(DateTimeFormatter.ofPattern("EEEE", Locale.getDefault()))
-            }
-        }
+        // Whoof: ONE short line that always fits — "Tue 22 Sept", "Yesterday · 21 Sept", "Mon 21 Sept".
+        // "Yesterday · Monday, 21 September" was ellipsised on a 393 dp phone with the sync chip up
+        // ("Yesterday · Monda…"), and a cut date is a wrong date. "Yesterday" already names the weekday, so
+        // that day drops it; every other day carries its weekday in three letters. Nothing else changes.
+        val dayTitle = if (selectedDayOffset == 1) uiString(R.string.today_day_yesterday) else ""
         // Human date line under the title — "Friday, 3 July" (weekday + day + month), NOT a numeric date.
         // Dated by the row ACTUALLY on screen (selectedDayKey follows the resolver at offset 0), matching
         // the iOS `dateLine` (EEEE, d MMMM). Mirrors iOS's date-under-title block.
         val humanDate = run {
             val keyDate = runCatching { LocalDate.parse(selectedDayKey) }.getOrNull() ?: selectedDay
-            keyDate.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()))
+            val pattern = if (selectedDayOffset == 1) "d MMM" else "EEE d MMM"
+            keyDate.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
         }
         // #486: header + wordmark + Arrange fold into ONE compact top cluster. Previously the decorative
         // "N O O P" wordmark and the pinned "Arrange" affordance were each their own full-width list item,
@@ -1594,10 +1613,23 @@ fun TodayScreen(
             }
             if (selectedDayOffset != 0 || !scoresBuildingDismissed) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    DataPendingNote(
-                        title = uiString(R.string.l10n_today_screen_live_now_your_scores_are_building_cb05a4e8),
-                        body = uiString(R.string.today_pending_scores_body),
+                    ScoresBuildingNote(
+                        lastSyncAt = liveSnap.lastSyncAt,
+                        historyReachTs = historyReachTs,
+                        everScoredANight = everScoredANight,
+                        isToday = selectedDayOffset == 0,
                     )
+                    // Only today can be waiting on a sync. Kicking one from a past day asked the strap
+                    // for history it has already handed over or already forgotten, and then reported
+                    // "refreshed" over a day that had not changed.
+                    LaunchedEffect(liveSnap.connected, liveSnap.bonded, liveSnap.backfilling, selectedDayOffset) {
+                        if (selectedDayOffset != 0) return@LaunchedEffect
+                        if (!liveSnap.connected || !liveSnap.bonded || liveSnap.backfilling) return@LaunchedEffect
+                        val stored = NoopPrefs.lastSyncAt(context).takeIf { it > 0L } ?: 0L
+                        val last = maxOf(liveSnap.lastSyncAt ?: 0L, stored)
+                        val age = System.currentTimeMillis() / 1000 - last
+                        if (last == 0L || age > 90) viewModel.syncNow()
+                    }
                     // The × is only meaningful for today's card (a past day's note isn't dismissed).
                     if (selectedDayOffset == 0 && updateStore != null) {
                         TodayCardDismissButton(
@@ -1711,6 +1743,7 @@ fun TodayScreen(
                                         isTodaySelected = selectedDayOffset == 0,
                                     ),
                                     onOpenMetric = onOpenMetric,
+                                    sleepWindow = lastNightWindow,
                                 )
                             }
                             // Honest "why is Effort 0?" caption — only when today's Effort is a real
@@ -2640,10 +2673,10 @@ private fun LiquidTodayHeader(
                 .semantics { contentDescription = uiString(R.string.l10n_today_screen_daytitle_humandate_tap_to_pick_a_7e12ce96, dayTitle, humanDate) },
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            // Whoof: the date alone; "Today" is implied by the tab.
+            // Whoof: the date alone; "Today" is implied by the tab. 15 sp, not 17 — the line must fit whole.
             Text(
-                if (dayTitle.equals("Today", ignoreCase = true)) humanDate else "$dayTitle · $humanDate",
-                style = NoopType.number(17f, weight = FontWeight.Bold)
+                if (dayTitle.isBlank()) humanDate else "$dayTitle · $humanDate",
+                style = NoopType.number(15f, weight = FontWeight.Bold)
                     .copy(shadow = Shadow(color = Color.Black.copy(alpha = 0.4f), offset = Offset(0f, 1f), blurRadius = 10f)),
                 color = Color.White,
                 maxLines = 1,
@@ -2971,6 +3004,8 @@ private fun ScoreHeroRow(
     // Charge keeps `onChargeTap` (its breakdown sheet), which is richer than a trend and has no twin on
     // the iOS liquid Today. Defaulted to a no-op so the ring stays inert where a host does not bind it.
     onOpenMetric: ((String) -> Unit)? = null,
+    // Whoof: the night's main sleep window, printed under the rings as "Asleep 23:58 → Awake 06:48".
+    sleepWindow: SleepSession? = null,
 ) {
     val recovery = day?.recovery
     // Prefer the live in-progress Effort for today, but never BELOW the day's already-earned strain
@@ -3020,6 +3055,7 @@ private fun ScoreHeroRow(
             // split-screen pane, a foldable's cover display. Unbounded, that overflowed the column; bounded,
             // the ring simply shrinks with its column instead of spilling out of it.
             val ring = ((maxWidth - ringGap * 2) / 3.1f).coerceIn(90.dp, 112.dp).coerceAtMost(col)
+            Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(ringGap, Alignment.CenterHorizontally),
@@ -3157,7 +3193,43 @@ private fun ScoreHeroRow(
                     }
                 }
             }
+            if (sleepWindow != null) HeroSleepWindow(sleepWindow)
+            }
         }
+    }
+}
+
+/** Whoof: bedtime and wake under the hero rings, large enough to read at a glance. */
+@Composable
+private fun HeroSleepWindow(window: SleepSession) {
+    val fmt = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
+    val zone = ZoneId.systemDefault()
+    fun hm(ts: Long) = java.time.Instant.ofEpochSecond(ts).atZone(zone).format(fmt)
+    val mins = ((window.endTs - window.startTs) / 60L).coerceAtLeast(0L)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Palette.textPrimary.copy(alpha = 0.06f))
+            .padding(horizontal = Metrics.space16, vertical = Metrics.space12)
+            .semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HeroSleepEdge(uiString(R.string.today_sleep_asleep), hm(window.startTs), Modifier.weight(1f), Alignment.Start)
+        Text(
+            text = String.format(Locale.getDefault(), "%dh%02d", mins / 60, mins % 60),
+            style = NoopType.number(17f),
+            color = Palette.textSecondary,
+        )
+        HeroSleepEdge(uiString(R.string.today_sleep_awake), hm(window.endTs), Modifier.weight(1f), Alignment.End)
+    }
+}
+
+@Composable
+private fun HeroSleepEdge(label: String, time: String, modifier: Modifier, align: Alignment.Horizontal) {
+    Column(modifier = modifier, horizontalAlignment = align) {
+        Text(text = label.uppercase(), style = NoopType.overline, color = Palette.textSecondary, maxLines = 1)
+        Text(text = time, style = NoopType.number(24f), color = Palette.textPrimary, maxLines = 1)
     }
 }
 
@@ -3593,6 +3665,59 @@ private fun RingEmptyOverlay(
     } else {
         RingNoData(diameter = diameter)
     }
+}
+
+/**
+ * The empty-score note, saying what is actually true of the day on screen.
+ *
+ * It used to say one thing always: "Live now. Your scores are building", with a body offering to
+ * import a WHOOP export. On a Monday viewed on Tuesday morning every clause of that was false —
+ * nothing was live, nothing was building, and the day was over. The screen was not slow, it was
+ * wrong, and no amount of motion on top of it would have made it right.
+ *
+ * So the note branches on the two facts that decide which sentence is true: whether this install has
+ * ever scored a night ([everScoredANight] — the new-strap copy is only honest before the first one),
+ * and whether the day on screen is still running ([isToday]). A finished day with no scores is not
+ * waiting for anything; its strap records never arrived, and the caption says how far the history we
+ * hold actually reaches so the gap is a number rather than a mood.
+ */
+@Composable
+private fun ScoresBuildingNote(
+    lastSyncAt: Long?,
+    historyReachTs: Long?,
+    everScoredANight: Boolean,
+    isToday: Boolean,
+) {
+    var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
+    LaunchedEffect(lastSyncAt, historyReachTs) {
+        while (true) {
+            nowSec = System.currentTimeMillis() / 1000
+            delay(30_000)
+        }
+    }
+    val stored = NoopPrefs.lastSyncAt(LocalContext.current).takeIf { it > 0L } ?: 0L
+    val stamp = maxOf(lastSyncAt ?: 0L, stored)
+    val offload = if (stamp > 0L) {
+        uiString(R.string.today_refreshed_ago, relativeAgo(stamp, nowSec))
+    } else {
+        uiString(R.string.today_not_refreshed)
+    }
+    // A strap that has never scored a night for this install really is still building; anyone else is
+    // looking at a gap, and the two deserve different sentences.
+    val building = !everScoredANight && isToday
+    val reach = historyReachTs?.let {
+        uiString(R.string.today_history_reaches, relativeAgo(it, nowSec))
+    } ?: uiString(R.string.today_history_none)
+    DataPendingNote(
+        title = uiString(
+            if (building) R.string.l10n_today_screen_live_now_your_scores_are_building_cb05a4e8
+            else R.string.today_history_gap_title,
+        ),
+        body = uiString(
+            if (building) R.string.today_pending_scores_body else R.string.today_history_gap_body,
+        ),
+        refreshed = if (building) offload else "$reach · $offload",
+    )
 }
 
 @Composable
@@ -6343,15 +6468,15 @@ private fun LiquidKeyTile(
                 icon,
                 contentDescription = null,
                 tint = data.tint.copy(alpha = 0.72f),
-                modifier = Modifier.size(12.dp),
+                modifier = Modifier.size(15.dp),
             )
-            Text(
-                data.label.uppercase(),
-                style = NoopType.overline.copy(fontSize = 9.sp, letterSpacing = 1.2.sp),
-                color = Palette.textTertiary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            // Whoof: sentence case at a readable size, shrinking to fit rather than cutting "BLOOD OXYG…".
+            AutoSizeValue(
+                text = data.label,
+                style = NoopType.subhead.copy(fontWeight = FontWeight.SemiBold),
+                color = Palette.textSecondary,
                 modifier = Modifier.weight(1f),
+                minScale = 0.75f,
             )
         }
         Row(verticalAlignment = Alignment.Bottom) {
@@ -6378,8 +6503,8 @@ private fun LiquidKeyTile(
             Text(
                 cap,
                 style = NoopType.caption,
-                color = Palette.textTertiary,
-                maxLines = 1,
+                color = Palette.textSecondary,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }

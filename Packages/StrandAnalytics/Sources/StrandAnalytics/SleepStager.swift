@@ -656,14 +656,14 @@ public enum SleepStager {
     /// `public` because the app target calls it: `Strand/Data/IntelligenceEngine.swift` is the day scan,
     /// and it lives outside this package. The spine and the anchor below it stay `internal` — the tests
     /// reach them with `@testable`, and nothing outside should be building its own spine.
-    public static func hrOnlySessions(hr: [HRSample], rr: [RRInterval], resp: [RespSample],
+    public static func hrOnlySessions(day: String, hr: [HRSample], rr: [RRInterval], resp: [RespSample],
                                       minMinutes: Int = minSleepMin,
                                       traceSink: ((String) -> Void)? = nil) -> [SleepSession] {
         let hrS = hr.sorted { $0.ts < $1.ts }
         // ONE sort of the bpm axis, reused for the anchor and for the spread the trace reports.
         let sortedBpm = hrS.map { Double($0.bpm) }.sorted()
         guard let baseline = percentileOfSorted(sortedBpm, hrOnlyAnchorPercentile) else {
-            traceSink?(GateTrace.hrOnlyLine(anchorBpm: nil, bandBpm: nil, hrP50: nil, hrP90: nil,
+            traceSink?(GateTrace.hrOnlyLine(day: day, anchorBpm: nil, bandBpm: nil, hrP50: nil, hrP90: nil,
                                             epochs: 0, runs: 0,
                                             mergedRuns: 0, sleepRuns: 0, longestSleepMin: 0,
                                             staged: 0, kept: 0, minSleepMin: minMinutes))
@@ -702,6 +702,7 @@ public enum SleepStager {
                                     hrOnly: true))
         }
         traceSink?(GateTrace.hrOnlyLine(
+            day: day,
             anchorBpm: baseline,
             bandBpm: baseline * hrOnlyBandMult,
             // The wearer's own spread. An anchor alone cannot be judged: p10 of 60 means one thing when
@@ -1138,6 +1139,29 @@ public enum SleepStager {
     /// bare "asleep".
     static let bandVetoRecoverStage: String = "light"
 
+    /// Whoof: band-anchored onset/offset — the strap's OWN classifier places a run's EDGES. The HR gates
+    /// judge a still run against a 54-hour day median, which for a fit wearer admits an evening on the sofa
+    /// at 50 bpm as readily as sleep; the band (0 wake / 1 still / 2 asleep / 3 up) is the one independent
+    /// signal that separates the two, and it was only ever consumed to RESCUE a run. A run's onset moves to
+    /// its first sustained band-asleep stretch, its offset to the end of the last; a densely banded run the
+    /// strap never scored asleep for `bandAnchorPersistEpochs` in a row is dropped. Shrink only, no-op below
+    /// `bandAnchorMinCoverage`. On by default. Kotlin twin `SleepStager.bandAnchorEnabled`.
+    static let bandAnchorEnabled: Bool = true
+    /// Consecutive 30 s band-asleep epochs that make an onset or a final wake: 10 = five minutes.
+    static let bandAnchorPersistEpochs: Int = 10
+    /// Fraction of a run's 5-minute buckets that must hold a RAW band sample before the anchor is trusted.
+    static let bandAnchorMinCoverage: Double = 0.80
+    /// Coverage bucket (Whoof 1.5.8): 5/MG band rides clumped v18 records, so 30 s epochs never reach 80 %.
+    static let bandAnchorCoverageBucketS: Int = 300
+    /// Share of 5-minute buckets over `[start, end)` holding a raw band sample. Kotlin twin `bandBucketCoverage`.
+    static func bandBucketCoverage(start: Int, end: Int, bandSleepState: [(Int, Int)]) -> Double {
+        if end <= start || bandSleepState.isEmpty { return 0 }
+        let n = max(1, (end - start + bandAnchorCoverageBucketS - 1) / bandAnchorCoverageBucketS)
+        var hit = Set<Int>()
+        for (ts, _) in bandSleepState where ts >= start && ts < end { hit.insert((ts - start) / bandAnchorCoverageBucketS) }
+        return Double(hit.count) / Double(n)
+    }
+
     /// #1210: a TRACE-ONLY line reporting what the (dormant) band wake-veto WOULD recover on a banded night,
     /// so a validator gathers the recovered-minutes distribution across real nights without any output change
     /// (the persisted hypnogram stays the flag-gated, unchanged one). Namespaced `bandVeto(shadow):` and free
@@ -1146,6 +1170,52 @@ public enum SleepStager {
     static func bandVetoShadowLine(startTs: Int, recoveredMin: Double, rawEff: Double, shadowEff: Double) -> String {
         "bandVeto(shadow): startTs=\(startTs) recoveredMin=\(Int(recoveredMin.rounded())) "
             + "eff \(Int((rawEff * 100).rounded()))%->\(Int((shadowEff * 100).rounded()))%"
+    }
+
+    /// Result of `bandAnchoredSpan`: the trimmed run (nil = dropped), the raw coverage, the edge shifts, and
+    /// whether the band was dense enough to be consulted at all. Kotlin twin `SleepStager.BandAnchor`.
+    struct BandAnchor { let span: Period?; let coverage: Double; let onsetShiftS: Int; let wakeShiftS: Int; let consulted: Bool }
+
+    /// Band-anchored onset/offset for one still run — see `bandAnchorEnabled`. Kotlin twin `bandAnchoredSpan`.
+    static func bandAnchoredSpan(_ p: Period, bandSleepState: [(Int, Int)],
+                                 enabled: Bool = bandAnchorEnabled,
+                                 persistEpochs: Int = bandAnchorPersistEpochs,
+                                 minCoverage: Double = bandAnchorMinCoverage) -> BandAnchor {
+        let untouched = BandAnchor(span: p, coverage: 0, onsetShiftS: 0, wakeShiftS: 0, consulted: false)
+        if !enabled || bandSleepState.isEmpty || p.end <= p.start || persistEpochs < 1 { return untouched }
+        let raw = rowsBetween(bandSleepState, start: p.start, end: p.end) { $0.0 }
+        if raw.isEmpty { return untouched }
+        let n = max(1, Int(ceil(Double(p.end - p.start) / epochS)))
+        let coverage = bandBucketCoverage(start: p.start, end: p.end, bandSleepState: raw)
+        if coverage < minCoverage { return BandAnchor(span: p, coverage: coverage, onsetShiftS: 0, wakeShiftS: 0, consulted: false) }
+        let states = sessionEpochSleepState(start: p.start, end: p.end, sleepState: bandSleepState)
+        if states.count != n { return BandAnchor(span: p, coverage: coverage, onsetShiftS: 0, wakeShiftS: 0, consulted: false) }
+        var onset = -1, run = 0, runStart = 0
+        for i in 0..<n {
+            if states[i] == bandStateAsleep {
+                if run == 0 { runStart = i }
+                run += 1
+                if run >= persistEpochs { onset = runStart; break }
+            } else { run = 0 }
+        }
+        if onset < 0 { return BandAnchor(span: nil, coverage: coverage, onsetShiftS: 0, wakeShiftS: 0, consulted: true) }
+        var lastAsleep = -1
+        run = 0
+        var runTop = n - 1
+        for i in stride(from: n - 1, through: 0, by: -1) {
+            if states[i] == bandStateAsleep {
+                if run == 0 { runTop = i }
+                run += 1
+                if run >= persistEpochs { lastAsleep = runTop; break }
+            } else { run = 0 }
+        }
+        if lastAsleep < onset { return BandAnchor(span: nil, coverage: coverage, onsetShiftS: 0, wakeShiftS: 0, consulted: true) }
+        func epochStart(_ i: Int) -> Int { p.start + Int(Double(i) * epochS) }
+        let newStart = max(p.start, epochStart(onset))
+        let newEnd = lastAsleep >= n - 1 ? p.end : min(p.end, epochStart(lastAsleep + 1))
+        let trimmed = Period(stage: p.stage, start: newStart, end: newEnd)
+        return BandAnchor(span: trimmed, coverage: coverage, onsetShiftS: newStart - p.start,
+                          wakeShiftS: p.end - newEnd, consulted: true)
     }
 
     /// Band sleep_state WAKE-veto. Given a staged hypnogram `stages` (StageSegments tiling `[start, end]`)
@@ -1491,6 +1561,31 @@ public enum SleepStager {
         // that kept or dropped it. The decisions below are byte-identical to the untraced path; the
         // `traceSink?(...)` calls are the only addition and never alter `sessions`. `runIndex` counts
         // only sleep-stage runs so the trace numbers match the candidate ordinal.
+        // Whoof: band-anchored onset/offset (see `bandAnchorEnabled`) — trim to the strap's own sustained-asleep
+        // stretches BEFORE the gates, so every gate judges the span the strap says was slept. Kotlin twin.
+        if bandAnchorEnabled && !bandSleepState.isEmpty {
+            var anchored: [Period] = []
+            anchored.reserveCapacity(runs.count)
+            var anchorIndex = -1
+            for p in runs {
+                if p.stage != "sleep" { anchored.append(p); continue }
+                anchorIndex += 1
+                let a = bandAnchoredSpan(p, bandSleepState: bandSleepState)
+                guard let span = a.span else {
+                    traceSink?(GateTrace.runLine(index: anchorIndex, startTs: p.start, endTs: p.end,
+                        verdict: .dropped, gate: "bandAnchor",
+                        detail: "coverage=\(round2(a.coverage)) sustainedAsleep=none persistEpochs=\(bandAnchorPersistEpochs)"))
+                    continue
+                }
+                if a.consulted && (a.onsetShiftS > 0 || a.wakeShiftS > 0) {
+                    traceSink?(GateTrace.runLine(index: anchorIndex, startTs: p.start, endTs: p.end,
+                        verdict: .kept, gate: "bandAnchor",
+                        detail: "coverage=\(round2(a.coverage)) onsetShiftMin=\(a.onsetShiftS / 60) wakeShiftMin=\(a.wakeShiftS / 60) span=\(span.start)-\(span.end)"))
+                }
+                anchored.append(span)
+            }
+            runs = anchored
+        }
         var runIndex = -1
         // #737 follow-up: counters for the one-line detection summary emitted before `return` (below).
         // Trace-only — never read back into `sessions`, so the untraced path stays byte-identical. They
@@ -2655,12 +2750,21 @@ public enum SleepStager {
         return .noRespFallbackBar                          // resp never measured and the no-resp bar unmet
     }
 
-    /// Read-only REM-funnel triage for ONE in-bed window [start, end] (#688). Re-runs the SAME Stage-0→3
-    /// staging seam `stageSession` uses (epoch grid → Cole–Kripke → features → classify → smooth →
-    /// re-impose), but instead of emitting a hypnogram it COUNTS where REM was lost. Changes NOTHING:
-    /// no label, no score, no session. Returns nil only when the window has too little gravity to grid
-    /// (mirroring `stageSession`'s degenerate fallback, which carries no REM to explain). The caller
-    /// logs `.summary`; tests assert the counts. Pure + deterministic. (#688)
+    /// Read-only REM-funnel triage for ONE in-bed window [start, end] (#688). Re-runs THIS type's
+    /// Stage-0→3 seam (epoch grid → Cole–Kripke → features → classify → smooth → re-impose), but
+    /// instead of emitting a hypnogram it COUNTS where REM was lost. Changes NOTHING: no label, no
+    /// score, no session. Returns nil only when the window has too little gravity to grid (mirroring
+    /// `stageSession`'s degenerate fallback, which carries no REM to explain). The caller logs
+    /// `.summary`; tests assert the counts. Pure + deterministic. (#688)
+    ///
+    /// WHICH HYPNOGRAM THIS EXPLAINS. V1's, always — this function is `SleepStager`'s own seam. It used
+    /// to say it explained "the SAME hypnogram" as the screen, and that has been false since V2 became
+    /// the default: the shipped hypnogram is staged by `SleepStagerV2` whenever
+    /// `experimentalSleepV2Enabled` says so, which is by default. On a 5/MG the two can be far apart,
+    /// because V1's primary REM gate needs the raw respiratory channel the hardware never emits while V2
+    /// recovers respiration regularity from R-R: one field pair reported ~46 min REM here against hours
+    /// on the screen for the same night (#2365). The caller's line names both stagers for that reason
+    /// (#2366); do not restore the claim that they are one. 
     public static func remFunnelDiagnostic(start: Int, end: Int, grav: [GravitySample],
                                            hr: [HRSample], rr: [RRInterval],
                                            resp: [RespSample]) -> REMFunnelDiagnostic? {
@@ -2944,7 +3048,7 @@ public enum SleepStager {
     }
 
     /// Mean RMSSD over 5-min tumbling windows across the session (ms), or nil.
-    /// Uses the same range-filter + ≥2-valid-interval rule as hrv.rmssd().
+    /// A window counts only with `HRVAnalyzer.minBeats` clean intervals (see `sessionHrvWindows`).
     static func sessionAvgHRV(start: Int, end: Int, rr: [RRInterval]) -> Double? {
         let vals = sessionHrvWindows(start: start, end: end, rr: rr, stages: []).compactMap { $0.rmssd }
         if vals.isEmpty { return nil }
@@ -3006,7 +3110,11 @@ public enum SleepStager {
             // #204/#195: gap-aware — a successive difference straddling a dropped beat is skipped so a
             // removed out-of-range/ectopic beat can't splice its neighbours into a spurious delta.
             let cleaned = HRVAnalyzer.cleanRRGapAware(bucket)
-            let rmssd: Double? = (cleaned.nn.count >= 2) ? HRVAnalyzer.rmssdGapAware(cleaned.nn, cleaned.contiguous) : nil
+            // The same `minBeats` floor the spot reading and the SDNN index apply. The night is a plain mean
+            // over windows, so without it a window left with a handful of clean beats (a dropout, a
+            // movement-shredded stretch, a short final window) weighed as much as a full five minutes.
+            let rmssd: Double? = (cleaned.nn.count >= HRVAnalyzer.minBeats)
+                ? HRVAnalyzer.rmssdGapAware(cleaned.nn, cleaned.contiguous) : nil
             let center = t + windowS / 2
             let stage = stages.first { center >= $0.start && center < $0.end }?.stage ?? "?"
             out.append(HrvWindow(startTs: t, stage: stage, cleanBeats: cleaned.nn.count, rmssd: rmssd))

@@ -699,7 +699,15 @@ public enum AnalyticsEngine {
         // call site" a scattered filter invites.
         let physiologyOnly = matched.filter { !$0.hrOnly }
         let physiologySessions = physiologyOnly.isEmpty ? matched : physiologyOnly
-        let restingHRDaily = physiologySessions.compactMap { $0.restingHR }.min()
+        // Resting Heart Rate: Use PrimarySessionRestingHR (arithmetic sample mean of the longest/primary
+        // sleep session, #1169), eliminating daytime nap floor distortion.
+        // #804: Preserve ring/device-provided resting HR when present in `providedSleep`.
+        // Cleanly falls back to physiologySessions.compactMap { $0.restingHR }.min() when coverage is sparse.
+        let providedPrimaryRHR = physiologySessions.max(by: { ($0.end - $0.start) < ($1.end - $1.start) })
+            .flatMap { p in providedSleep.first(where: { $0.start == p.start && $0.end == p.end })?.restingHR }
+        let restingHRDaily: Int? = providedPrimaryRHR
+            ?? primarySessionRestingHR(sessions: physiologySessions, hr: hr).map { Int($0.rounded()) }
+            ?? physiologySessions.compactMap { $0.restingHR }.min()
         // Daily avg HRV = in-bed-weighted mean of per-session avg HRV.
         let avgHRVDaily: Double? = {
             if deepHrvWindow {

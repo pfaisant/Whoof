@@ -863,6 +863,9 @@ object IntelligenceEngine {
             // window of days scored by a recipe the user just turned off, with nothing to explain it.
             effortMethod.toString(),
             dayCycleMode.persistedValue,
+            // Whoof: the sleep-tuning knobs. Without them a Settings or calibration change was replayed
+            // over nights already scored this process, i.e. silently ignored until the app restarted.
+            SleepTuning.signature(),
         ).joinToString("|")
         // Drop the whole cache on a config change. Under [analyzeGate] (this whole pass runs holding the
         // lock), so mutating the object-level cache here is race-free.
@@ -1085,6 +1088,15 @@ object IntelligenceEngine {
             if (bandSleepState.isEmpty()) {
                 bandSleepState = bandSleepStateSamples(repo, computedId, from, to)
             }
+            // Whoof 1.5.8: one always-on line per scored night saying whether the strap's own sleep band
+            // is there to place the night's edges (SleepStager.bandAnchoredSpan). Without it a report of a
+            // wrong bedtime cannot tell "no band on this strap / this night" from "band ignored".
+            dayDiag(
+                "bandState day=$day rows=${bandSleepState.size} " +
+                    "asleep=${bandSleepState.count { it.second == SleepStager.bandStateAsleep }} " +
+                    "coverage5m=${SleepStagerTrace.round2(SleepStager.bandBucketCoverage(from, to, bandSleepState))} " +
+                    "anchor=${SleepStager.bandAnchorEnabled}",
+            )
 
             // #804 Fix A: when this day's owner sends NO usable gravity vector — so the motion detector can't
             // stage the night and it scored blank — AND it persisted its OWN hypnogram under its device
@@ -1113,7 +1125,7 @@ object IntelligenceEngine {
                 when {
                     owner != importedDeviceId && stored.isNotEmpty() -> {
                         dayDiag(SleepStagerTrace.hrOnlyGateLine(
-                            attempted = false, reason = "stored-hypnogram",
+                            day = day, attempted = false, reason = "stored-hypnogram",
                             gravRows = grav.size, storedNights = stored.size,
                         ))
                         stored
@@ -1123,7 +1135,7 @@ object IntelligenceEngine {
                         // analyzeDay as "provided" — but they still mean this night is already known,
                         // so the heart-rate fallback stays out of it.
                         dayDiag(SleepStagerTrace.hrOnlyGateLine(
-                            attempted = false, reason = "stored-sessions-exist",
+                            day = day, attempted = false, reason = "stored-sessions-exist",
                             gravRows = grav.size, storedNights = stored.size,
                         ))
                         emptyList()
@@ -1137,10 +1149,10 @@ object IntelligenceEngine {
                         // little" is not "none", so the night it could produce is marked
                         // [DetectedSleep.hrOnly] like every other.
                         dayDiag(SleepStagerTrace.hrOnlyGateLine(
-                            attempted = true, reason = "no-motion-no-hypnogram",
+                            day = day, attempted = true, reason = "no-motion-no-hypnogram",
                             gravRows = grav.size, storedNights = 0,
                         ))
-                        SleepStager.hrOnlySessions(hr, rr, resp, traceSink = ::dayDiag)
+                        SleepStager.hrOnlySessions(day, hr, rr, resp, traceSink = ::dayDiag)
                     }
                 }
             } else {
@@ -1357,6 +1369,15 @@ object IntelligenceEngine {
                         windowHours = windowHours, skinCount = skin.size,
                     ),
                 )
+                // Whoof 1.6.0: a lost night says WHICH gate dropped it. The per-run gate trace otherwise runs
+                // only in the Sleep test mode, so the 19–21 Sept export showed three `staged-none` nights and
+                // no reason. Re-running detection traced costs one extra pass on a night that produced
+                // nothing, bounded to 30 lines.
+                // Kept OUT of this method: analyzeRecentOnCpu sits at the JVM's 64 KB bytecode budget
+                // (IntelligenceEngineJacocoBudgetTest), and an inline block here pushed it over.
+                for (g in noNightGateLines(hr, rr, resp, grav, tzOffsetSeconds, bandSleepState)) {
+                    dayDiag("sleep-gate day=$day $g")
+                }
             }
 
             // Steps test mode: emit the 5/MG raw-counter trace for this day (cumulative @57 series +
@@ -1986,8 +2007,16 @@ object IntelligenceEngine {
         // "naps". Dedup each device's rows AMONG THEMSELVES and delete stale copies under that SAME id
         // (deleteSleepSessionRowOnly deletes under the row's own deviceId), never across ids, so a survivor
         // is never orphaned under an id the day-owner read skips. `freshStarts` (this pass's computed bank
-        // witness) only matches the computedId rows; the others fall back to longest-wins, the read-side
-        // dedup's own default. Sorted for a deterministic order. Mirrors the Swift analyzeRecent heal.
+        // witness) is handed ONLY to the computedId sweep; every other id falls back to longest-wins, the
+        // read-side dedup's own default. It used to be passed to every id on the claim that it "only
+        // matches the computedId rows" — false on an Oura day, where the pass's sessions ARE the ring's
+        // `providedSleep` rows with `startTs` copied verbatim. The ring row the pass had READ was then
+        // ranked "fresh" in the ring's own sweep and outranked every fuller re-serve the ring banked while
+        // the pass was in flight (hours, when the OS suspends the app between the read and this heal): on
+        // 09-19/20 the heal deleted the 598-min full night one second after it landed and kept the 337-min
+        // row read at 04:14, so the day ended at 04:48 instead of 08:21. `SleepSessionDedup.healWitness` is
+        // the one shared rule (twin of Swift's). Sorted for a deterministic order. Mirrors the Swift
+        // analyzeRecent heal.
         val healDeviceIds = healDeviceIds(computedId, candidatePriorities.map { it.first })
         // Compact shape of a row for the #1284 heal log — the two measures that adjudicate WHICH copy is
         // fuller (stage-segment count + decoded JSON length), in the SAME format as the dup-gen diagnostic
@@ -2004,7 +2033,8 @@ object IntelligenceEngine {
             val healable = storedSessions.filter {
                 AnalyticsEngine.dayString(it.endTs, tzOffsetSeconds) in oldestDay..newestDay
             }
-            val sweep = SleepSessionDedup.dedupe(healable, freshStarts = keptStarts)
+            val witness = SleepSessionDedup.healWitness(healId, computedId, keptStarts)
+            val sweep = SleepSessionDedup.dedupe(healable, freshStarts = witness)
             // Row-only delete: the user-facing deleteSleepSession writes a #33 dismissal tombstone, which
             // would overlap the SURVIVING night's window and permanently suppress its re-detection.
             for (stale in sweep.dropped) {
@@ -3249,6 +3279,22 @@ object IntelligenceEngine {
      * Counts + a window length only — same privacy class as the sibling `sleep day=` line, no PII. Pure so
      * it's unit-tested directly; byte-identical to the Swift `sleepDetectNoNightLogLine`.
      */
+    /** Whoof: the per-run gate verdicts for a night that produced nothing (≤ 30 lines). */
+    internal fun noNightGateLines(
+        hr: List<com.noop.data.HrSample>, rr: List<com.noop.data.RrInterval>, resp: List<com.noop.data.RespSample>,
+        grav: List<com.noop.data.GravitySample>, tzOffsetSeconds: Long, band: List<Pair<Long, Int>>,
+    ): List<String> {
+        if (grav.size < 2) return emptyList()
+        val lines = ArrayList<String>()
+        runCatching {
+            SleepStager.detectSleep(
+                hr = hr, rr = rr, resp = resp, gravity = grav, tzOffsetSeconds = tzOffsetSeconds,
+                bandSleepState = band, traceSink = { lines += it },
+            )
+        }
+        return lines.take(30)
+    }
+
     internal fun sleepDetectNoNightLogLine(
         day: String, hrCount: Int, rrCount: Int, respCount: Int, gravCount: Int,
         stepCount: Int, providedCount: Int, windowHours: Int, skinCount: Int,

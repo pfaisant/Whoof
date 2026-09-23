@@ -320,7 +320,9 @@ import WhoopStore
     static func applying(_ result: Result, to daily: DailyMetric) -> DailyMetric {
         let established = result.firstWakeDay.map { daily.day >= $0 } ?? false
         let steps = established ? result.stepsByWakeDay[daily.day] : daily.steps
-        let strain = established ? result.strainByWakeDay[daily.day] : daily.strain
+        // A day the open cycle does not own keeps the calendar-day integral. Nulling it dropped a
+        // real run onto no row: the cycle stayed filed on an earlier wake-day.
+        let strain = established ? (result.strainByWakeDay[daily.day] ?? daily.strain) : daily.strain
         let calories = established ? result.caloriesByWakeDay[daily.day] : daily.activeKcalEst
         let workouts = established ? result.workoutCountByWakeDay[daily.day] : daily.exerciseCount
         return DailyMetric(day: daily.day, totalSleepMin: daily.totalSleepMin, efficiency: daily.efficiency,
